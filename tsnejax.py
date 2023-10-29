@@ -1,15 +1,14 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial.distance import pdist, squareform
+from jax import jit
 
 import jax
 from jax import random
 
-
 def compute_pairwise_distances(high_dimensional_data):
     """
-    Compute pairwise distances between data points.
+    Compute pairwise distances between data points using JAX.
 
     Args:
         high_dimensional_data (jnp.ndarray): High-dimensional input data.
@@ -17,8 +16,10 @@ def compute_pairwise_distances(high_dimensional_data):
     Returns:
         jnp.ndarray: Pairwise distances matrix.
     """
-    pairwise_distances = pdist(high_dimensional_data, "sqeuclidean")
-    return jnp.array(squareform(pairwise_distances))
+    # Calculate pairwise distances using JAX
+    pairwise_distances = jnp.sum((high_dimensional_data[:, None] - high_dimensional_data) ** 2, axis=-1)
+
+    return pairwise_distances
 
 
 def initialize_beta_values(num_data_points):
@@ -33,9 +34,7 @@ def initialize_beta_values(num_data_points):
     """
     return jnp.ones((num_data_points, 1))
 
-
-# Iterate through data points with lax.fori_loop
-
+@jit
 def calculate_entropy_and_probabilities(pairwise_distances, beta=1.0):
     """
     Calculate entropy and probabilities from pairwise distances.
@@ -77,20 +76,20 @@ def update_beta(beta, entropy_difference, beta_min, beta_max):
     """
     if entropy_difference > 0:
         beta_min = beta
-        if beta_max == jnp.inf or beta_max == -jnp.inf:
+        if beta_max == jnp.inf:
             beta = beta * 2.
         else:
             beta = (beta + beta_max) / 2.
     else:
         beta_max = beta
-        if beta_min == jnp.inf or beta_min == -jnp.inf:
+        if beta_min == -jnp.inf:
             beta = beta / 2.
         else:
             beta = (beta + beta_min) / 2.
     return beta, beta_min, beta_max
 
 
-def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5, target_perplexity=30.0):
+def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5, target_perplexity=30.0, scaling_factor = 4.):
     num_data_points = high_dimensional_data.shape[0]
     pairwise_distances = compute_pairwise_distances(high_dimensional_data)
     pairwise_probabilities = jnp.zeros((num_data_points, num_data_points))
@@ -115,6 +114,13 @@ def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5, target
 
         pairwise_probabilities = pairwise_probabilities.at[i, compute_neighboring_indices(i, num_data_points)].set(
             this_probabilities)
+
+    pairwise_probabilities += jnp.transpose(pairwise_probabilities)
+    pairwise_probabilities /= jnp.sum(pairwise_probabilities)
+    pairwise_probabilities *= scaling_factor
+
+    # Apply element-wise maximum using JAX
+    pairwise_probabilities = jnp.maximum(pairwise_probabilities, 1e-12)
 
     return pairwise_probabilities
 
@@ -185,57 +191,8 @@ def compute_neighboring_indices(i, num_data_points):
     return jnp.concatenate((jnp.arange(i), jnp.arange(i + 1, num_data_points)))
 
 
-def initialize_low_dimensional_embedding(num_data_points, num_dimensions):
-    """
-    Initialize the low-dimensional embedding.
-
-    Args:
-        num_data_points (int): Number of data points.
-        num_dimensions (int): Number of dimensions for the low-dimensional embedding.
-
-    Returns:
-        jnp.ndarray: Initialized low-dimensional embedding.
-    """
-    key = jax.random.PRNGKey(0)
-    return jax.random.normal(key, (num_data_points, num_dimensions))
-
-
-def compute_initial_momentum(iteration, initial_momentum, final_momentum):
-    """
-    Compute the momentum for the current iteration.
-
-    Args:
-        iteration (int): Current iteration number.
-        initial_momentum (float): Initial momentum value.
-        final_momentum (float): Final momentum value.
-
-    Returns:
-        float: Computed momentum.
-    """
-    return initial_momentum if iteration < 20 else final_momentum
-
-
-def update_gains(gains, gradient, previous_gradient):
-    """
-    Update the gains for gradient adjustments.
-
-    Args:
-        gains (jnp.ndarray): Current gains.
-        gradient (jnp.ndarray): Gradient values.
-        previous_gradient (jnp.ndarray): Previous gradient values.
-
-    Returns:
-        jnp.ndarray: Updated gains.
-    """
-    gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (gains * 0.8) * (
-            (gradient > 0.) == (previous_gradient > 0.))
-    gains = jnp.where(gains < 0.01, 0.01, gains)
-    return gains
-
-
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       target_perplexity, max_iterations=1000,
-                                      initial_momentum=0.5, final_momentum=0.8,
                                       learning_rate=500):
     """
     Compute the low-dimensional embedding using t-SNE algorithm.
@@ -245,8 +202,6 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         num_dimensions (int): Number of dimensions for the low-dimensional embedding.
         target_perplexity (float): Target perplexity value.
         max_iterations (int): Maximum number of iterations.
-        initial_momentum (float): Initial momentum value.
-        final_momentum (float): Final momentum value.
         learning_rate (float): Learning rate.
 
     Returns:
@@ -261,13 +216,6 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
 
     # Compute pairwise probabilities using JAX
     pairwise_probabilities = compute_pairwise_probabilities(high_dimensional_data, 1e-5, target_perplexity)
-
-    pairwise_probabilities += jnp.transpose(pairwise_probabilities)
-    pairwise_probabilities /= jnp.sum(pairwise_probabilities)
-    pairwise_probabilities *= 4.
-
-    # Apply element-wise maximum using JAX
-    pairwise_probabilities = jnp.maximum(pairwise_probabilities, 1e-12)
 
     for iteration in range(max_iterations):
         sum_of_squared_low_dimensional_embedding = jnp.sum(jnp.square(low_dimensional_embedding), axis=1)

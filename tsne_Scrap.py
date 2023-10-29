@@ -1,20 +1,29 @@
-import numpy as np
+import timeit
+import jax.numpy as jnp
+from jax import jit
+from jax import random
 
-# Sample data matrix (mean-centered)
-X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+# Define your function
+def compute_pairwise_distances_jax(high_dimensional_data):
+    pairwise_distances = jnp.sum((high_dimensional_data[:, None, :] - high_dimensional_data) ** 2, axis=-1)
+    return pairwise_distances
 
-# Compute the covariance matrix
-cov_matrix = np.cov(X, rowvar=False)
+# Generate a random key for random number generation
+key = random.PRNGKey(0)
 
-# Compute eigenvalues and eigenvectors
-eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
+# Generate some sample data
+num_data_points = 1000
+high_dimensional_data = random.normal(key, (num_data_points, 10))  # Adjust the dimensions as needed
 
-# Sort eigenvalues and eigenvectors (optional)
-sorted_indices = np.argsort(eigenvalues)[::-1]
-eigenvalues = eigenvalues[sorted_indices]
-eigenvectors = eigenvectors[:, sorted_indices]
+# Time the function without jit
+time_no_jit = timeit.timeit(lambda: compute_pairwise_distances_jax(high_dimensional_data), number=100)
 
-# Print results
-print("Eigenvalues:", eigenvalues)
-print("Eigenvectors:")
-print(eigenvectors)
+# Decorate the function with jit
+compute_pairwise_distances_jax_jit = jit(compute_pairwise_distances_jax)
+
+# Time the function with jit
+time_with_jit = timeit.timeit(lambda: compute_pairwise_distances_jax_jit(high_dimensional_data), number=100)
+
+# Print the timings
+print("Time without JIT: {:.5f} seconds".format(time_no_jit))
+print("Time with JIT: {:.5f} seconds".format(time_with_jit))
