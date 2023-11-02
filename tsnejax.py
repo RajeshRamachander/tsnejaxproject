@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jax import jit
-
+from jax import lax
 import jax
 from jax import random
 
@@ -87,6 +87,7 @@ def update_beta(beta, entropy_difference, beta_min, beta_max):
         else:
             beta = (beta + beta_min) / 2.
     return beta, beta_min, beta_max
+
 
 
 def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5, target_perplexity=30.0, scaling_factor = 4.):
@@ -190,23 +191,84 @@ def compute_neighboring_indices(i, num_data_points):
     """
     return jnp.concatenate((jnp.arange(i), jnp.arange(i + 1, num_data_points)))
 
+#
+# def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
+#                                       target_perplexity, max_iterations=1000,
+#                                       learning_rate=500):
+#     """
+#     Compute the low-dimensional embedding using t-SNE algorithm.
+#
+#     Args:
+#         high_dimensional_data (np.ndarray): High-dimensional input data.
+#         num_dimensions (int): Number of dimensions for the low-dimensional embedding.
+#         target_perplexity (float): Target perplexity value.
+#         max_iterations (int): Maximum number of iterations.
+#         learning_rate (float): Learning rate.
+#
+#     Returns:
+#         np.ndarray: Low-dimensional embedding.
+#     """
+#     num_data_points = high_dimensional_data.shape[0]
+#
+#     high_dimensional_data = preprocess_high_dimensional_data(high_dimensional_data)
+#
+#     low_dimensional_embedding, gradient, previous_gradient, gains = initialize_embedding_and_gradients(num_data_points,
+#                                                                                                        num_dimensions)
+#
+#     # Compute pairwise probabilities using JAX
+#     pairwise_probabilities = compute_pairwise_probabilities(high_dimensional_data, 1e-5, target_perplexity)
+#
+#     for iteration in range(max_iterations):
+#         sum_of_squared_low_dimensional_embedding = jnp.sum(jnp.square(low_dimensional_embedding), axis=1)
+#         num = -2. * jnp.dot(low_dimensional_embedding, low_dimensional_embedding.T)
+#         num = 1. / (1. + num + sum_of_squared_low_dimensional_embedding + sum_of_squared_low_dimensional_embedding[:,
+#                                                                           None])
+#         # Replace fill_diagonal with JAX operations
+#         diag_indices = jnp.arange(num_data_points)
+#         num = jnp.where(diag_indices[:, None] == diag_indices, 0., num)
+#
+#         pairwise_similarity_q = num / jnp.sum(num)
+#         pairwise_similarity_q = jnp.maximum(pairwise_similarity_q, 1e-12)
+#
+#         KL_divergence = jnp.sum(pairwise_probabilities * jnp.log(
+#             pairwise_probabilities / pairwise_similarity_q))
+#
+#         if (iteration + 1) % 100 == 0:
+#             print("Iteration %d: KL Divergence is %f" % (iteration + 1, KL_divergence))
+#
+#         pairwise_similarity_pq = pairwise_probabilities - pairwise_similarity_q
+#
+#         def compute_gradient(i):
+#             product_matrix = pairwise_similarity_pq[:, i] * num[:, i]
+#             tiled_matrix = jnp.tile(product_matrix, (num_dimensions, 1)).T
+#             difference_matrix = low_dimensional_embedding[i, :] - low_dimensional_embedding
+#             element_wise_product = tiled_matrix * difference_matrix
+#             gradient_value = jnp.sum(element_wise_product, axis=0)
+#             gradient_value = jnp.sum(
+#                 (pairwise_similarity_pq[:, i] * num[:, i])[:, jnp.newaxis] *
+#                 (low_dimensional_embedding[i, :] - low_dimensional_embedding), axis=0)
+#             return gradient_value
+#
+#         gradient = jax.vmap(compute_gradient)(jnp.arange(num_data_points))
+#
+#         momentum = 0.5 if iteration < 20 else 0.8
+#         gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (
+#                 gains * 0.8) * ((gradient > 0.) == (previous_gradient > 0.))
+#         gains = jnp.maximum(gains, 0.01)
+#         previous_gradient = momentum * previous_gradient - learning_rate * (
+#                 gains * gradient)
+#         low_dimensional_embedding += previous_gradient
+#
+#         low_dimensional_embedding -= jnp.tile(jnp.mean(low_dimensional_embedding, axis=0),
+#                                               (num_data_points, 1))
+#
+#     # Convert JAX arrays to NumPy arrays before returning
+#     return low_dimensional_embedding
+
 
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       target_perplexity, max_iterations=1000,
                                       learning_rate=500):
-    """
-    Compute the low-dimensional embedding using t-SNE algorithm.
-
-    Args:
-        high_dimensional_data (np.ndarray): High-dimensional input data.
-        num_dimensions (int): Number of dimensions for the low-dimensional embedding.
-        target_perplexity (float): Target perplexity value.
-        max_iterations (int): Maximum number of iterations.
-        learning_rate (float): Learning rate.
-
-    Returns:
-        np.ndarray: Low-dimensional embedding.
-    """
     num_data_points = high_dimensional_data.shape[0]
 
     high_dimensional_data = preprocess_high_dimensional_data(high_dimensional_data)
@@ -214,15 +276,13 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     low_dimensional_embedding, gradient, previous_gradient, gains = initialize_embedding_and_gradients(num_data_points,
                                                                                                        num_dimensions)
 
-    # Compute pairwise probabilities using JAX
-    pairwise_probabilities = compute_pairwise_probabilities(high_dimensional_data, 1e-5, target_perplexity)
+    def body_carry(carry):
+        low_dim_emb, grad, prev_grad, gains, iteration = carry
 
-    for iteration in range(max_iterations):
-        sum_of_squared_low_dimensional_embedding = jnp.sum(jnp.square(low_dimensional_embedding), axis=1)
-        num = -2. * jnp.dot(low_dimensional_embedding, low_dimensional_embedding.T)
-        num = 1. / (1. + num + sum_of_squared_low_dimensional_embedding + sum_of_squared_low_dimensional_embedding[:,
-                                                                          None])
-        # Replace fill_diagonal with JAX operations
+        sum_of_squared_low_dimensional_embedding = jnp.sum(jnp.square(low_dim_emb), axis=1)
+        num = -2. * jnp.dot(low_dim_emb, low_dim_emb.T)
+        num = 1. / (1. + num + sum_of_squared_low_dimensional_embedding + sum_of_squared_low_dimensional_embedding[
+                                                                          :, None])
         diag_indices = jnp.arange(num_data_points)
         num = jnp.where(diag_indices[:, None] == diag_indices, 0., num)
 
@@ -232,60 +292,50 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         KL_divergence = jnp.sum(pairwise_probabilities * jnp.log(
             pairwise_probabilities / pairwise_similarity_q))
 
-        if (iteration + 1) % 100 == 0:
-            print("Iteration %d: KL Divergence is %f" % (iteration + 1, KL_divergence))
-
         pairwise_similarity_pq = pairwise_probabilities - pairwise_similarity_q
-
-        # for i in range(num_data_points):
-        #     # Calculate the product of two matrices
-        #     product_matrix = pairwise_similarity_pq[:, i] * num[:, i]
-        #
-        #     # Tile the product_matrix to match the shape of low_dimensional_embedding
-        #     tiled_matrix = jnp.tile(product_matrix, (num_dimensions, 1)).T
-        #
-        #     # Calculate the difference between low_dimensional_embedding[i, :] and itself
-        #     difference_matrix = low_dimensional_embedding[i, :] - low_dimensional_embedding
-        #
-        #     # Element-wise multiplication of the tiled_matrix and difference_matrix
-        #     element_wise_product = tiled_matrix * difference_matrix
-        #
-        #     # Sum along axis 0 to compute the final gradient value
-        #     gradient_value = jnp.sum(element_wise_product, axis=0)
-        #
-        #     # Compute the gradient value
-        #     gradient_value = jnp.sum(
-        #         (pairwise_similarity_pq[:, i] * num[:, i])[:, jnp.newaxis] *
-        #         (low_dimensional_embedding[i, :] - low_dimensional_embedding), axis=0)
-        #
-        #     # Update the gradient array for the ith row
-        #     gradient = gradient.at[i, :].set(gradient_value)
 
         def compute_gradient(i):
             product_matrix = pairwise_similarity_pq[:, i] * num[:, i]
             tiled_matrix = jnp.tile(product_matrix, (num_dimensions, 1)).T
-            difference_matrix = low_dimensional_embedding[i, :] - low_dimensional_embedding
+            difference_matrix = low_dim_emb[i, :] - low_dim_emb
             element_wise_product = tiled_matrix * difference_matrix
             gradient_value = jnp.sum(element_wise_product, axis=0)
             gradient_value = jnp.sum(
                 (pairwise_similarity_pq[:, i] * num[:, i])[:, jnp.newaxis] *
-                (low_dimensional_embedding[i, :] - low_dimensional_embedding), axis=0)
+                (low_dim_emb[i, :] - low_dim_emb), axis=0)
             return gradient_value
 
         gradient = jax.vmap(compute_gradient)(jnp.arange(num_data_points))
 
-        momentum = 0.5 if iteration < 20 else 0.8
-        gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (
-                gains * 0.8) * ((gradient > 0.) == (previous_gradient > 0.))
+        # Use separate functions for true_fun and false_fun
+        def true_fun(x):
+            return 0.5
+
+        def false_fun(x):
+            return 0.8
+
+        # Conditionally determine momentum
+        momentum = lax.cond(iteration < 20, true_fun, false_fun, None)
+
+        gains = (gains + 0.2) * ((gradient > 0.) != (prev_grad > 0.)) + (
+                gains * 0.8) * ((gradient > 0.) == (prev_grad > 0.))
         gains = jnp.maximum(gains, 0.01)
-        previous_gradient = momentum * previous_gradient - learning_rate * (
-                gains * gradient)
-        low_dimensional_embedding += previous_gradient
+        prev_grad = momentum * prev_grad - learning_rate * (gains * gradient)
+        low_dim_emb += prev_grad
+        low_dim_emb -= jnp.tile(jnp.mean(low_dim_emb, axis=0), (num_data_points, 1))
 
-        low_dimensional_embedding -= jnp.tile(jnp.mean(low_dimensional_embedding, axis=0),
-                                              (num_data_points, 1))
+        return (low_dim_emb, gradient, prev_grad, gains, iteration + 1)
 
-    # Convert JAX arrays to NumPy arrays before returning
+    def cond_carry(carry):
+        _, _, _, gains, iteration = carry
+        return jnp.all(gains > 0.01) & (iteration < max_iterations)
+
+    pairwise_probabilities = compute_pairwise_probabilities(high_dimensional_data, 1e-5, target_perplexity)
+    (low_dimensional_embedding, _, _, _, _) = lax.while_loop(cond_carry, body_carry,
+                                                             ((
+                                                             low_dimensional_embedding, gradient, previous_gradient,
+                                                             gains, 0)))
+
     return low_dimensional_embedding
 
 
