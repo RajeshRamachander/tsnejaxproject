@@ -236,29 +236,43 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
             print("Iteration %d: KL Divergence is %f" % (iteration + 1, KL_divergence))
 
         pairwise_similarity_pq = pairwise_probabilities - pairwise_similarity_q
-        for i in range(num_data_points):
-            # Calculate the product of two matrices
+
+        # for i in range(num_data_points):
+        #     # Calculate the product of two matrices
+        #     product_matrix = pairwise_similarity_pq[:, i] * num[:, i]
+        #
+        #     # Tile the product_matrix to match the shape of low_dimensional_embedding
+        #     tiled_matrix = jnp.tile(product_matrix, (num_dimensions, 1)).T
+        #
+        #     # Calculate the difference between low_dimensional_embedding[i, :] and itself
+        #     difference_matrix = low_dimensional_embedding[i, :] - low_dimensional_embedding
+        #
+        #     # Element-wise multiplication of the tiled_matrix and difference_matrix
+        #     element_wise_product = tiled_matrix * difference_matrix
+        #
+        #     # Sum along axis 0 to compute the final gradient value
+        #     gradient_value = jnp.sum(element_wise_product, axis=0)
+        #
+        #     # Compute the gradient value
+        #     gradient_value = jnp.sum(
+        #         (pairwise_similarity_pq[:, i] * num[:, i])[:, jnp.newaxis] *
+        #         (low_dimensional_embedding[i, :] - low_dimensional_embedding), axis=0)
+        #
+        #     # Update the gradient array for the ith row
+        #     gradient = gradient.at[i, :].set(gradient_value)
+
+        def compute_gradient(i):
             product_matrix = pairwise_similarity_pq[:, i] * num[:, i]
-
-            # Tile the product_matrix to match the shape of low_dimensional_embedding
             tiled_matrix = jnp.tile(product_matrix, (num_dimensions, 1)).T
-
-            # Calculate the difference between low_dimensional_embedding[i, :] and itself
             difference_matrix = low_dimensional_embedding[i, :] - low_dimensional_embedding
-
-            # Element-wise multiplication of the tiled_matrix and difference_matrix
             element_wise_product = tiled_matrix * difference_matrix
-
-            # Sum along axis 0 to compute the final gradient value
             gradient_value = jnp.sum(element_wise_product, axis=0)
-
-            # Compute the gradient value
             gradient_value = jnp.sum(
                 (pairwise_similarity_pq[:, i] * num[:, i])[:, jnp.newaxis] *
                 (low_dimensional_embedding[i, :] - low_dimensional_embedding), axis=0)
+            return gradient_value
 
-            # Update the gradient array for the ith row
-            gradient = gradient.at[i, :].set(gradient_value)
+        gradient = jax.vmap(compute_gradient)(jnp.arange(num_data_points))
 
         momentum = 0.5 if iteration < 20 else 0.8
         gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (
