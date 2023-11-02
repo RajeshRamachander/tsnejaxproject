@@ -6,34 +6,6 @@ from jax import lax
 import jax
 from jax import random
 
-def compute_pairwise_distances(high_dimensional_data):
-    """
-    Compute pairwise distances between data points using JAX.
-
-    Args:
-        high_dimensional_data (jnp.ndarray): High-dimensional input data.
-
-    Returns:
-        jnp.ndarray: Pairwise distances matrix.
-    """
-    # Calculate pairwise distances using JAX
-    pairwise_distances = jnp.sum((high_dimensional_data[:, None] - high_dimensional_data) ** 2, axis=-1)
-
-    return pairwise_distances
-
-
-def initialize_beta_values(num_data_points):
-    """
-    Initialize beta values for each data point.
-
-    Args:
-        num_data_points (int): Number of data points.
-
-    Returns:
-        jnp.ndarray: Initialized beta values.
-    """
-    return jnp.ones((num_data_points, 1))
-
 @jit
 def calculate_entropy_and_probabilities(pairwise_distances, beta=1.0):
     """
@@ -92,9 +64,11 @@ def update_beta(beta, entropy_difference, beta_min, beta_max):
 
 def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5, target_perplexity=30.0, scaling_factor = 4.):
     num_data_points = high_dimensional_data.shape[0]
-    pairwise_distances = compute_pairwise_distances(high_dimensional_data)
+    # Calculate pairwise distances using JAX
+    pairwise_distances = jnp.sum((high_dimensional_data[:, None] - high_dimensional_data) ** 2, axis=-1)
     pairwise_probabilities = jnp.zeros((num_data_points, num_data_points))
-    beta_values = initialize_beta_values(num_data_points)
+    #Initialize beta values for each data point.
+    beta_values = jnp.ones((num_data_points, 1))
     log_target_perplexity = jnp.log(target_perplexity)
 
     for i in range(num_data_points):
