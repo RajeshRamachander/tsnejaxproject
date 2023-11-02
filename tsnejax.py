@@ -4,13 +4,14 @@ import jax
 from jax import jit
 from jax import lax
 from jax import random
-from sklearn.manifold import TSNE
+import numpy as np
 import matplotlib.pyplot as plt
-import numpy as np
+from sklearn.manifold import TSNE
 import time
-import numpy as np
-from scipy.special import kl_div
 from scipy.stats import pearsonr
+from sklearn.metrics import pairwise_distances
+from scipy.spatial.distance import squareform
+
 
 @jit
 def calculate_entropy_and_probabilities(pairwise_distances, beta=1.0):
@@ -244,16 +245,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     return low_dimensional_embedding
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
-import time
-from scipy.stats import pearsonr
-from sklearn.metrics import pairwise_distances
-from scipy.spatial.distance import squareform
-from scipy.stats import entropy
-from sklearn.metrics import mutual_info_score
-from sklearn.metrics import normalized_mutual_info_score
+
 
 # Define constant synthetic cluster data with more clusters
 num_clusters = 5
