@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+import time
+from sklearn.manifold import TSNE
 
 import matplotlib.pyplot as plt
 
@@ -49,13 +51,13 @@ def update_beta(beta, entropy_difference, beta_min, beta_max):
   """
   if entropy_difference > 0:
     beta_min = beta
-    if beta_max == np.inf or beta_max == -np.inf:
+    if beta_max == np.inf:
       beta = beta * 2.
     else:
       beta = (beta + beta_max) / 2.
   else:
     beta_max = beta
-    if beta_min == np.inf or beta_min == -np.inf:
+    if beta_min == -np.inf:
       beta = beta / 2.
     else:
       beta = (beta + beta_min) / 2.
@@ -127,49 +129,6 @@ def compute_neighboring_indices(i, num_data_points):
   return np.concatenate((np.r_[0:i], np.r_[i + 1:num_data_points]))
 
 
-def initialize_low_dimensional_embedding(num_data_points, num_dimensions):
-    """
-    Initialize the low-dimensional embedding.
-
-    Args:
-        num_data_points (int): Number of data points.
-        num_dimensions (int): Number of dimensions for the low-dimensional embedding.
-
-    Returns:
-        np.ndarray: Initialized low-dimensional embedding.
-    """
-    return np.random.randn(num_data_points, num_dimensions)
-
-def compute_initial_momentum(iteration, initial_momentum, final_momentum):
-    """
-    Compute the momentum for the current iteration.
-
-    Args:
-        iteration (int): Current iteration number.
-        initial_momentum (float): Initial momentum value.
-        final_momentum (float): Final momentum value.
-
-    Returns:
-        float: Computed momentum.
-    """
-    return initial_momentum if iteration < 20 else final_momentum
-
-def update_gains(gains, gradient, previous_gradient):
-    """
-    Update the gains for gradient adjustments.
-
-    Args:
-        gains (np.ndarray): Current gains.
-        gradient (np.ndarray): Gradient values.
-        previous_gradient (np.ndarray): Previous gradient values.
-
-    Returns:
-        np.ndarray: Updated gains.
-    """
-    gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (gains * 0.8) * (
-                (gradient > 0.) == (previous_gradient > 0.))
-    gains[gains < 0.01] = 0.01
-    return gains
 
 
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
@@ -250,18 +209,58 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
   return low_dimensional_embedding
 
 
-# Synthetic Data
-# Define constant synthetic cluster data
-cluster_1 = np.array([[1.0, 1.0] for _ in range(100)])
-cluster_2 = np.array([[2.0, 2.0] for _ in range(100)])
-cluster_3 = np.array([[3.0, 3.0] for _ in range(100)])
-data = np.vstack([cluster_1, cluster_2, cluster_3])
 
-perplexity_value = 30
+# Define constant synthetic cluster data with more clusters
+num_clusters = 5
+cluster_size = 100
+data = np.vstack([np.random.randn(cluster_size, 2) + i * 2 for i in range(num_clusters)])
 
-Y_custom = compute_low_dimensional_embedding(data, num_dimensions=2, target_perplexity=perplexity_value)
+# Best perplexity chosen from the previous hyperparameter search
+best_perplexity = 30
 
-plt.scatter(Y_custom[:, 0], Y_custom[:, 1], 20, range(len(Y_custom)))
-plt.title('Custom t-SNE transformed Data')
-plt.grid(True)
+# Record the start time for the custom t-SNE implementation
+start_time_custom = time.time()
+
+# Compute low-dimensional embedding for the best perplexity
+Y_custom_best = compute_low_dimensional_embedding(data, num_dimensions=2, target_perplexity=best_perplexity)
+
+# Calculate the execution time for the custom t-SNE implementation
+end_time_custom = time.time()
+custom_tsne_time = end_time_custom - start_time_custom
+
+# Record the start time for the scikit-learn t-SNE implementation
+start_time_sklearn = time.time()
+
+# Apply t-SNE using scikit-learn for comparison
+tsne = TSNE(n_components=2, perplexity=best_perplexity, random_state=0)
+Y_sklearn = tsne.fit_transform(data)
+
+# Calculate the execution time for the scikit-learn t-SNE implementation
+end_time_sklearn = time.time()
+sklearn_tsne_time = end_time_sklearn - start_time_sklearn
+
+# Create a figure with three subplots side by side
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+# Plot the original data
+axes[0].scatter(data[:, 0], data[:, 1], 20, range(len(data)))
+axes[0].set_title('Original Data')
+axes[0].grid(True)
+
+# Plot the custom t-SNE results with the best perplexity
+axes[1].scatter(Y_custom_best[:, 0], Y_custom_best[:, 1], 20, range(len(Y_custom_best)))
+axes[1].set_title(f'Custom t-SNE Transformed Data (Perplexity {best_perplexity})')
+axes[1].grid(True)
+
+# Plot scikit-learn t-SNE results with the same perplexity
+axes[2].scatter(Y_sklearn[:, 0], Y_sklearn[:, 1], 20, range(len(Y_sklearn)))
+axes[2].set_title(f'Scikit-learn t-SNE Transformed Data (Perplexity {best_perplexity})')
+axes[2].grid(True)
+
+# Display the subplots
+plt.tight_layout()
 plt.show()
+
+# Print the execution times
+print(f"Custom t-SNE Execution Time: {custom_tsne_time} seconds")
+print(f"Scikit-learn t-SNE Execution Time: {sklearn_tsne_time} seconds")
