@@ -154,8 +154,11 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
 
   high_dimensional_data -= np.mean(high_dimensional_data, axis=0)
 
-  _, S, _ = np.linalg.svd(high_dimensional_data, full_matrices=False)
-  high_dimensional_data /= np.sqrt(S[0])
+  std_dev = np.std(high_dimensional_data, axis=0)
+
+  std_dev = np.where(std_dev > 0, std_dev, 1.0)
+
+  high_dimensional_data /= std_dev
 
 
   low_dimensional_embedding = np.random.randn(num_data_points, num_dimensions)
