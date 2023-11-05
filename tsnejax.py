@@ -130,12 +130,6 @@ def update_beta_until_convergence(i, beta_values, distances_i, log_target_perple
         entropy_difference = entropy - log_target_perplexity
         return beta_value, beta_min, beta_max, beta_values, entropy_difference, this_probabilities
 
-    # while should_continue(entropy_difference, tolerance, num_tries, max_tries):
-    #     beta_value, beta_min, beta_max, beta_values, entropy_difference, this_probabilities = execute_update(
-    #         i, beta_value, entropy_difference, beta_min, beta_max, beta_values, distances_i, log_target_perplexity
-    #     )
-    #     num_tries += 1
-
     for _ in range(max_tries):
         if should_continue(entropy_difference, tolerance, num_tries, max_tries):
             beta_value, beta_min, beta_max, beta_values, entropy_difference, this_probabilities = execute_update(
@@ -266,10 +260,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         return jnp.all(iteration < max_iterations)
 
 
-    (low_dimensional_embedding, _, _, _, _) = lax.while_loop(cond_carry, update_embedding,
-                                                             ((
-                                                                 low_dimensional_embedding, gradient, previous_gradient,
-                                                                 gains, 0)))
+    (low_dimensional_embedding, _, _, _, _) = lax.while_loop(cond_carry, update_embedding,((low_dimensional_embedding, gradient, previous_gradient,gains, 0)))
 
     return low_dimensional_embedding
 
