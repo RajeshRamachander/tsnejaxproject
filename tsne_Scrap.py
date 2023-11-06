@@ -1,7 +1,3 @@
-"""
-implementation of van der Maaten, L.J.P.; Hinton, G.E. Visualizing High-Dimensional Data
-Using t-SNE. Journal of Machine Learning Research 9:2579-2605, 2008.
-"""
 
 import numpy as np
 from tqdm import tqdm
