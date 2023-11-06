@@ -14,3 +14,4 @@ __pycache__/tsnejax.cpython-311.pyc
 __pycache__/tsnejax.cpython-311.pyc
 .idea/shelf/Uncommitted_changes_before_Merge_at_06_11_23,_10_27_am_\[Changes\]/shelved.patch
 __pycache__/tsnenumpy.cpython-311.pyc
+*.patch
