@@ -1,140 +1,172 @@
 import numpy as np
-from scipy.spatial.distance import pdist, squareform
-import time
-from sklearn.manifold import TSNE
+from tqdm import tqdm
 
-import matplotlib.pyplot as plt
-
-def calculate_entropy_and_probabilities(pairwise_distances, beta=1.0):
-    """
-    Calculate entropy and probabilities from pairwise distances.
-
-    Args:
-        pairwise_distances (np.ndarray): Pairwise distances matrix.
-        beta (float, optional): Beta parameter.
-
-    Returns:
-        tuple: Tuple containing entropy and probabilities.
-    """
-    probabilities = np.exp(-pairwise_distances * beta)
-    sum_of_probabilities = np.sum(probabilities)
-    entropy = np.log(sum_of_probabilities) + beta * np.sum(pairwise_distances * probabilities) / sum_of_probabilities
-    probabilities /= sum_of_probabilities
-    return entropy, probabilities
-
-
-def initialize_beta_values(num_data_points):
-  """
-  Initialize beta values for each data point.
-
-  Args:
-      num_data_points (int): Number of data points.
-
-  Returns:
-      np.ndarray: Initialized beta values.
-  """
-  return np.ones((num_data_points, 1))
-
-
-def update_beta(beta, entropy_difference, beta_min, beta_max):
-  """
-  Update the beta value based on entropy difference.
-
-  Args:
-      beta (float): Current beta value.
-      entropy_difference (float): Current entropy difference.
-      beta_min (float): Minimum beta value.
-      beta_max (float): Maximum beta value.
-
-  Returns:
-      float: Updated beta value.
-  """
-  if entropy_difference > 0:
-    beta_min = beta
-    if beta_max == np.inf:
-      beta = beta * 2.
-    else:
-      beta = (beta + beta_max) / 2.
-  else:
-    beta_max = beta
-    if beta_min == -np.inf:
-      beta = beta / 2.
-    else:
-      beta = (beta + beta_min) / 2.
-  return beta, beta_min, beta_max
-
-
-def compute_pairwise_probabilities(high_dimensional_data, tolerance=1e-5,
-                                   target_perplexity=30.0):
-  """
-  Compute pairwise probabilities using t-SNE algorithm.
-
-  Args:
-      high_dimensional_data (np.ndarray): High-dimensional input data.
-      tolerance (float): Tolerance value for optimization.
-      target_perplexity (float): Target perplexity value.
-
-  Returns:
-      np.ndarray: Pairwise probabilities matrix.
-  """
-  num_data_points = high_dimensional_data.shape[0]
-  pairwise_distances = compute_pairwise_distances(high_dimensional_data)
-  pairwise_probabilities = np.zeros((num_data_points, num_data_points))
-  beta_values = initialize_beta_values(num_data_points)
-  log_target_perplexity = np.log(target_perplexity)
-
-  for i in range(num_data_points):
-    beta_min = -np.inf
-    beta_max = np.inf
-    distances_i = pairwise_distances[i, compute_neighboring_indices(i, num_data_points)]
-    entropy, this_probabilities = calculate_entropy_and_probabilities(distances_i, beta_values[i])
-    entropy_difference = entropy - log_target_perplexity
-    num_tries = 0
-    while np.abs(entropy_difference) > tolerance and num_tries < 50:
-      beta_values[i], beta_min, beta_max = update_beta(beta_values[i],entropy_difference,beta_min, beta_max)
-      entropy, this_probabilities = calculate_entropy_and_probabilities(distances_i, beta_values[i])
-      entropy_difference = entropy - log_target_perplexity
-      num_tries += 1
-
-    pairwise_probabilities[i, compute_neighboring_indices(i, num_data_points)] = this_probabilities
-
-  return pairwise_probabilities
-
+EPSILON = 1e-12
 
 def compute_pairwise_distances(high_dimensional_data):
-  """
-  Compute pairwise distances between data points.
+    """
+    Compute pairwise distances between data points.
 
-  Args:
-      high_dimensional_data (np.ndarray): High-dimensional input data.
+    Args:
+        high_dimensional_data (np.ndarray): High-dimensional input data.
 
-  Returns:
-      np.ndarray: Pairwise distances matrix.
-  """
-  pairwise_distances = pdist(high_dimensional_data, "sqeuclidean")
-  return squareform(pairwise_distances)
+    Returns:
+        np.ndarray: Pairwise distances matrix.
+    """
+    # Compute pairwise squared Euclidean distances using the NumPy approach
+    X_squared = np.square(high_dimensional_data)
+    sum_X = np.sum(X_squared, axis=1)
+    pairwise_distances = -2 * np.dot(high_dimensional_data, high_dimensional_data.T) + sum_X[:, np.newaxis] + sum_X
+    return pairwise_distances
+
+def calculate_row_wise_entropy(asym_affinities):
+    """
+    Row-wise Shannon entropy of pairwise affinity matrix P
+
+    Parameters:
+    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
+
+    Returns:
+    array-like row-wise Shannon entropy of shape (n_samples,)
+    """
+    asym_affinities = np.clip(
+        asym_affinities, EPSILON, None
+    )  # Some are so small that log2 fails.
+    return -np.sum(asym_affinities * np.log2(asym_affinities), axis=1)
+
+def calculate_row_wise_perplexities(asym_affinities):
+    """
+    Compute perplexities of pairwise affinity matrix P
+
+    Parameters:
+    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
+
+    Returns:
+    array-like row-wise perplexities of shape (n_samples,)
+    """
+    return 2 ** calculate_row_wise_entropy(asym_affinities)
+
+def pairwise_affinities(data, sigmas, dist_mat):
+    """Calculates the pairwise affinities p_{j|i} using the given values of sigma
+
+    Parameters:
+    data : ndarray of shape (n_samples, n_features)
+    sigmas : column array of shape (n_samples, 1)
+    dist_mat : data distance matrix; ndarray of shape (n_samples, n_samples)
+
+    Returns:
+    P: pairwise affinity matrix of size (n_samples, n_samples)
+
+    """
+    assert sigmas.shape == (data.shape[0], 1)
+    inner = (-dist_mat) / (2 * (sigmas ** 2))
+    numers = np.exp(inner)
+    denoms = np.sum(numers, axis=1) - np.diag(numers)
+    denoms = denoms.reshape(-1, 1)
+    denoms += EPSILON  # Avoid div/0
+    P = numers / denoms
+    np.fill_diagonal(P, 0.0)
+    return P
+
+def all_sym_affinities(data, perp, tol, attempts=100):
+    """
+    Finds the data-specific sigma values and calculates the symmetric affinities matrix P
+    Parameters:
+    data : ndarray of shape (n_samples, n_features)
+    perp : float, cost function parameter
+    tol : float, tolerance of how close the current perplexity is to the target perplexity
+    attempts : int, a maximum limit to the binary search attempts
+
+    Returns:
+    P: Symmetric affinities matrix of shape (n_samples, n_samples)
+
+    """
+    dist_mat = compute_pairwise_distances(data)  # mxm
+
+    sigma_maxs = np.full(data.shape[0], 1e12)
+
+    # Zero here causes div/0, /2sigma**2 in P calc
+    sigma_mins = np.full(data.shape[0], 1e-12)
+
+    current_perps = np.full(data.shape[0], np.inf)
+
+    while (not np.allclose(current_perps, perp, atol=tol)) and attempts > 0:
+        sigmas = (sigma_mins + sigma_maxs) / 2
+        P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat)
+        current_perps = calculate_row_wise_perplexities(P)
+        attempts -= 1
+        for i in range(len(current_perps)):
+            current_perp = current_perps[i]
+            if current_perp > perp:
+                sigma_maxs[i] = sigmas[i]
+            elif current_perp < perp:
+                sigma_mins[i] = sigmas[i]
+
+    if attempts == 0:
+        print(
+            "Warning: Ran out of attempts before converging, try a different perplexity?"
+        )
+    P = (P + P.T) / (2 * data.shape[0])
+    return P
 
 
-def compute_neighboring_indices(i, num_data_points):
-  """
-  Compute indices of neighboring data points.
+def low_dim_affinities(Y, Y_dist_mat):
+    """
+    computes the low dimensional affinities matrix Q
+    Parameters:
+    Y : low dimensional representation of the data, ndarray of shape (n_samples, n_components)
+    Y_dist_mat : Y distance matrix; ndarray of shape (n_samples, n_samples)
 
-  Args:
-      i (int): Index of the current data point.
-      num_data_points (int): Number of data points.
+    Returns:
+    Q: Symmetric low dimensional affinities matrix of shape (n_samples, n_samples)
 
-  Returns:
-      np.ndarray: Indices of neighboring data points.
-  """
-  return np.concatenate((np.r_[0:i], np.r_[i + 1:num_data_points]))
+    """
+    numers = (1 + Y_dist_mat) ** (-1)
+    denom = np.sum(numers) - np.sum(np.diag(numers))
+    denom += EPSILON  # Avoid div/0
+    Q = numers / denom
+    np.fill_diagonal(Q, 0.0)
+    return Q
 
+def compute_grad(P, Q, Y, Y_dist_mat):
+    """
+    computes the gradient vector needed to update the Y values
+    Parameters:
+    P: Symmetric affinities matrix of shape (n_samples, n_samples)
+    Q: Symmetric low dimensional affinities matrix of shape (n_samples, n_samples)
+    Y : low dimensional representation of the data, ndarray of shape (n_samples, n_components)
+    Y_dist_mat : Y distance matrix; ndarray of shape (n_samples, n_samples)
+
+    Returns:
+    grad: the gradient vector, shape (n_samples, n_components)
+
+    """
+    Ydiff = Y[:, np.newaxis, :] - Y[np.newaxis, :, :]
+    pq_factor = (P - Q)[:, :, np.newaxis]
+    dist_factor = ((1 + Y_dist_mat) ** (-1))[:, :, np.newaxis]
+    return np.sum(4 * pq_factor * Ydiff * dist_factor, axis=1)
+
+def momentum_func(t):
+    """returns optimization parameter
+
+    Parameters:
+    t: integer, iteration number
+
+    Returns:
+    float representing the momentum term added to the gradient
+    """
+    if t < 250:
+        return 0.5
+    else:
+        return 0.8
 
 
 
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
-                                      target_perplexity, max_iterations=1000,
-                                      initial_momentum=0.5, final_momentum=0.8,
-                                      learning_rate=500):
+                                      target_perplexity, max_iterations=100,
+                                      learning_rate=100, scaling_factor = 4.,
+                                      pbar=False, random_state=None,
+                                      perp_tol=1e-8):
   """
   Compute the low-dimensional embedding using t-SNE algorithm.
 
@@ -150,120 +182,31 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
   Returns:
       np.ndarray: Low-dimensional embedding.
   """
-  num_data_points = high_dimensional_data.shape[0]
-
-  high_dimensional_data -= np.mean(high_dimensional_data, axis=0)
-
-  std_dev = np.std(high_dimensional_data, axis=0)
-
-  std_dev = np.where(std_dev > 0, std_dev, 1.0)
-
-  high_dimensional_data /= std_dev
+  rand = np.random.RandomState(random_state)
+  P = all_sym_affinities(data=high_dimensional_data,perp=target_perplexity,tol=perp_tol) * scaling_factor
+  P = np.clip(P, EPSILON, None)
 
 
-  low_dimensional_embedding = np.random.randn(num_data_points, num_dimensions)
-  gradient = np.zeros((num_data_points, num_dimensions))
-  previous_gradient = np.zeros((num_data_points, num_dimensions))
-  gains = np.ones((num_data_points, num_dimensions))
+  init_mean = np.zeros(num_dimensions)
+  init_cov = np.identity(num_dimensions) * 1e-4
 
-  pairwise_probabilities = compute_pairwise_probabilities(high_dimensional_data, 1e-5, target_perplexity)
-  pairwise_probabilities += np.transpose(pairwise_probabilities)
-  pairwise_probabilities /= np.sum(pairwise_probabilities)
-  pairwise_probabilities *= 4.
-  pairwise_probabilities = np.maximum(pairwise_probabilities, 1e-12)
+  Y = rand.multivariate_normal(mean=init_mean, cov=init_cov, size=high_dimensional_data.shape[0])
 
-  for iteration in range(max_iterations):
-    sum_of_squared_low_dimensional_embedding = np.sum(
-      np.square(low_dimensional_embedding), 1)
-    num = -2. * np.dot(low_dimensional_embedding, low_dimensional_embedding.T)
-    num = 1. / (
-        1. + np.add(np.add(num, sum_of_squared_low_dimensional_embedding).T,
-                    sum_of_squared_low_dimensional_embedding))
-    num[range(num_data_points), range(num_data_points)] = 0.
+  Y_old = np.zeros_like(Y)
+  iter_range = range(max_iterations)
+  if pbar:
+      iter_range = tqdm(iter_range, "Iterations")
+  for t in iter_range:
+      Y_dist_mat = compute_pairwise_distances(Y)
+      Q = low_dim_affinities(Y, Y_dist_mat)
+      Q = np.clip(Q, EPSILON, None)
+      grad = compute_grad(P, Q, Y, Y_dist_mat)
+      Y = Y - learning_rate * grad + momentum_func(t) * (Y - Y_old)
+      Y_old = Y.copy()
+      if t == 100:
+          P = P / scaling_factor
+          pass
+      pass
 
-    pairwise_similarity_q = num / np.sum(num)
-    pairwise_similarity_q = np.maximum(pairwise_similarity_q, 1e-12)
+  return Y
 
-    KL_divergence = np.sum(pairwise_probabilities * np.log(
-      pairwise_probabilities / pairwise_similarity_q))
-    if (iteration + 1) % 100 == 0:
-      print(
-        "Iteration %d: KL Divergence is %f" % (iteration + 1, KL_divergence))
-
-    pairwise_similarity_pq = pairwise_probabilities - pairwise_similarity_q
-    for i in range(num_data_points):
-      gradient[i, :] = np.sum(
-        np.tile(pairwise_similarity_pq[:, i] * num[:, i],
-                (num_dimensions, 1)).T *
-        (low_dimensional_embedding[i, :] - low_dimensional_embedding), 0)
-
-    momentum = 0.5 if iteration < 20 else 0.8
-    gains = (gains + 0.2) * ((gradient > 0.) != (previous_gradient > 0.)) + (
-        gains * 0.8) * (
-              (gradient > 0.) == (previous_gradient > 0.))
-    gains[gains < 0.01] = 0.01
-    previous_gradient = momentum * previous_gradient - learning_rate * (
-        gains * gradient)
-    low_dimensional_embedding += previous_gradient
-
-    low_dimensional_embedding -= np.tile(np.mean(low_dimensional_embedding, 0),
-                                         (num_data_points, 1))
-
-  return low_dimensional_embedding
-
-#
-#
-# # Define constant synthetic cluster data with more clusters
-# num_clusters = 5
-# cluster_size = 100
-# data = np.vstack([np.random.randn(cluster_size, 2) + i * 2 for i in range(num_clusters)])
-#
-# # Best perplexity chosen from the previous hyperparameter search
-# best_perplexity = 30
-#
-# # Record the start time for the custom t-SNE implementation
-# start_time_custom = time.time()
-#
-# # Compute low-dimensional embedding for the best perplexity
-# Y_custom_best = compute_low_dimensional_embedding(data, num_dimensions=2, target_perplexity=best_perplexity)
-#
-# # Calculate the execution time for the custom t-SNE implementation
-# end_time_custom = time.time()
-# custom_tsne_time = end_time_custom - start_time_custom
-#
-# # Record the start time for the scikit-learn t-SNE implementation
-# start_time_sklearn = time.time()
-#
-# # Apply t-SNE using scikit-learn for comparison
-# tsne = TSNE(n_components=2, perplexity=best_perplexity, random_state=0)
-# Y_sklearn = tsne.fit_transform(data)
-#
-# # Calculate the execution time for the scikit-learn t-SNE implementation
-# end_time_sklearn = time.time()
-# sklearn_tsne_time = end_time_sklearn - start_time_sklearn
-#
-# # Create a figure with three subplots side by side
-# fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-#
-# # Plot the original data
-# axes[0].scatter(data[:, 0], data[:, 1], 20, range(len(data)))
-# axes[0].set_title('Original Data')
-# axes[0].grid(True)
-#
-# # Plot the custom t-SNE results with the best perplexity
-# axes[1].scatter(Y_custom_best[:, 0], Y_custom_best[:, 1], 20, range(len(Y_custom_best)))
-# axes[1].set_title(f'Custom t-SNE Transformed Data (Perplexity {best_perplexity})')
-# axes[1].grid(True)
-#
-# # Plot scikit-learn t-SNE results with the same perplexity
-# axes[2].scatter(Y_sklearn[:, 0], Y_sklearn[:, 1], 20, range(len(Y_sklearn)))
-# axes[2].set_title(f'Scikit-learn t-SNE Transformed Data (Perplexity {best_perplexity})')
-# axes[2].grid(True)
-#
-# # Display the subplots
-# plt.tight_layout()
-# plt.show()
-#
-# # Print the execution times
-# print(f"Custom t-SNE Execution Time: {custom_tsne_time} seconds")
-# print(f"Scikit-learn t-SNE Execution Time: {sklearn_tsne_time} seconds")
