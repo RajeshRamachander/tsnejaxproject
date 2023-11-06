@@ -216,15 +216,15 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     P = all_sym_affinities(high_dimensional_data, target_perplexity, perp_tol) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
-    # init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
-    # init_cov = jnp.eye(num_dimensions, dtype=jnp.float32) * 1e-4
+    init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
+    init_cov = jnp.eye(num_dimensions, dtype=jnp.float32) * 1e-4
+
+    Y = random.multivariate_normal(rand, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
+
+    # initialize_embeddings_jit = jax.jit(initialize_embeddings, static_argnums=(1,))
+    # # Call the JIT-compiled function with appropriate arguments
     #
-    # Y = random.multivariate_normal(rand, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
-
-    initialize_embeddings_jit = jax.jit(initialize_embeddings, static_argnums=(1,))
-    # Call the JIT-compiled function with appropriate arguments
-
-    Y = initialize_embeddings_jit(high_dimensional_data, num_dimensions, rand)
+    # Y = initialize_embeddings_jit(high_dimensional_data, num_dimensions, rand)
 
     Y_old = jnp.zeros_like(Y)
 
@@ -236,3 +236,24 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     _, Y = jax.lax.while_loop(condition, body, (0, Y))
 
     return Y
+
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+from sklearn.datasets import load_digits
+import numpy as np
+
+plt.style.use("seaborn-whitegrid")
+rcParams["font.size"] = 18
+rcParams["figure.figsize"] = (12, 8)
+
+
+digits, digit_class = load_digits(return_X_y=True)
+rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+data = digits[rand_idx, :].copy()
+classes = digit_class[rand_idx]
+
+low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, 100, pbar=True)
+
+scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
+plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+plt.show()
