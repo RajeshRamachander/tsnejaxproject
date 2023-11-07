@@ -182,13 +182,18 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
   Returns:
       np.ndarray: Low-dimensional embedding.
   """
-  rand = np.random.RandomState(random_state)
+
+
   P = all_sym_affinities(data=high_dimensional_data,perp=target_perplexity,tol=perp_tol) * scaling_factor
   P = np.clip(P, EPSILON, None)
 
 
   init_mean = np.zeros(num_dimensions)
   init_cov = np.identity(num_dimensions) * 1e-4
+
+  if random_state == None:
+      random_state = 42
+  rand = np.random.RandomState(random_state)
 
   Y = rand.multivariate_normal(mean=init_mean, cov=init_cov, size=high_dimensional_data.shape[0])
 
@@ -210,26 +215,26 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
 
   return Y
 
-
-
-from sklearn.datasets import load_digits
-
-
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-
-plt.style.use("seaborn-whitegrid")
-rcParams["font.size"] = 18
-rcParams["figure.figsize"] = (12, 8)
-
-
-digits, digit_class = load_digits(return_X_y=True)
-rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-data = digits[rand_idx, :].copy()
-classes = digit_class[rand_idx]
-
-low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, 100, pbar=True, random_state=42)
-
-scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
-plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-plt.show()
+#
+#
+# from sklearn.datasets import load_digits
+#
+#
+# import matplotlib.pyplot as plt
+# from matplotlib import rcParams
+#
+# plt.style.use("seaborn-whitegrid")
+# rcParams["font.size"] = 18
+# rcParams["figure.figsize"] = (12, 8)
+#
+#
+# digits, digit_class = load_digits(return_X_y=True)
+# rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+# data = digits[rand_idx, :].copy()
+# classes = digit_class[rand_idx]
+#
+# low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, 100, pbar=True, random_state=42)
+#
+# scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
+# plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+# plt.show()

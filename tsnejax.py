@@ -2,6 +2,7 @@ from jax import random
 import jax
 import jax.numpy as jnp
 from jax import jit
+from tqdm import tqdm
 
 EPSILON = 1e-12
 
@@ -34,9 +35,7 @@ def calculate_row_wise_entropy(asym_affinities):
     Returns:
     jnp.ndarray: Row-wise Shannon entropy of shape (n_samples,)
     """
-    asym_affinities = jnp.clip(
-        asym_affinities, EPSILON, None
-    )  # Some are so small that log2 fails.
+    asym_affinities = jnp.clip(asym_affinities, EPSILON, None)
     return -jnp.sum(asym_affinities * jnp.log2(asym_affinities), axis=1)
 
 @jit
@@ -51,6 +50,10 @@ def calculate_row_wise_perplexities(asym_affinities):
     jnp.ndarray: Row-wise perplexities of shape (n_samples,)
     """
     return 2 ** calculate_row_wise_entropy(asym_affinities)
+
+@jit
+def fill_diagonal(arr, value):
+    return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
 
 @jit
 def pairwise_affinities(data, sigmas, dist_mat):
@@ -75,9 +78,7 @@ def pairwise_affinities(data, sigmas, dist_mat):
     P = fill_diagonal(P,0)
     return P
 
-@jit
-def fill_diagonal(arr, value):
-    return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
+
 
 @jit
 def all_sym_affinities(data, perp, tol, attempts=100):
@@ -85,32 +86,44 @@ def all_sym_affinities(data, perp, tol, attempts=100):
     sigma_maxs = jnp.full(data.shape[0], 1e12)
     sigma_mins = jnp.full(data.shape[0], 1e-12)
     current_perps = jnp.full(data.shape[0], jnp.inf)
+    sigmas = (sigma_mins + sigma_maxs) / 2
+    P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat)
 
-    def condition(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins = args
+    def outer_while_condition(args):
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P = args
         return jnp.logical_and(
             jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
             attempts > 0
         )
 
-    def body(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins = args
+    def outer_while_body(args):
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P = args
         sigmas = (sigma_mins + sigma_maxs) / 2
-        P = pairwise_affinities(data, sigmas[:, None], dist_mat)
+        P = pairwise_affinities(data, sigmas.reshape(-1,1), dist_mat)
         current_perps = calculate_row_wise_perplexities(P)
         attempts -= 1
 
-        # Calculate new sigma_maxs and sigma_mins
-        new_sigma_maxs = jnp.where(current_perps > perp, sigmas, sigma_maxs)
-        new_sigma_mins = jnp.where(current_perps < perp, sigmas, sigma_mins)
+        def inner_while_condition(args):
+            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            return i < len(current_perps)
 
-        return (current_perps, perp, tol, attempts, new_sigma_maxs, new_sigma_mins)
+        def inner_while_body(args):
+            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            current_perp = current_perps[i]
+            sigma_maxs = sigma_maxs.at[i].set(jax.numpy.where(current_perp > perp, sigmas[i], sigma_maxs[i]))
+            sigma_mins = sigma_mins.at[i].set(jax.numpy.where(current_perp <= perp, sigmas[i], sigma_mins[i]))
+            return i + 1, sigmas, sigma_maxs, sigma_mins, current_perps, perp
 
-    initial_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins)
-    (_, _, _, _, final_sigma_maxs, final_sigma_mins) = jax.lax.while_loop(condition, body, initial_args)
-    P = pairwise_affinities(data, final_sigma_maxs[:, None], dist_mat)
+        inner_while_args = (0, sigmas, sigma_maxs, sigma_mins, current_perps, perp)
+        (_, _, sigma_maxs, sigma_mins, _, _ ) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
+
+        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P
+
+    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P)
+    (_, _, _, _, _, _, P) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+
     P = (P + P.T) / (2 * data.shape[0])
-    P = fill_diagonal(P, 0.0)  # Fill diagonal with zeros
+
     return P
 
 @jit
@@ -129,7 +142,7 @@ def low_dim_affinities(Y, Y_dist_mat):
     denom = jnp.sum(numers) - jnp.sum(jnp.diag(numers))
     denom += EPSILON  # Avoid div/0
     Q = numers / denom
-    Q = jnp.where(jnp.eye(Q.shape[0], dtype=bool), 0.0, Q)
+    Q = fill_diagonal(Q,0)
     return Q
 
 @jit
@@ -164,48 +177,11 @@ def momentum_func(t):
     return jnp.where(t < 250, 0.5, 0.8)
 
 
-
-@jit
-def compute_pairwise_distances(high_dimensional_data):
-    """
-    Compute pairwise distances between data points.
-
-    Args:
-        high_dimensional_data (jnp.ndarray): High-dimensional input data (JAX array).
-
-    Returns:
-        jnp.ndarray: Pairwise distances matrix (JAX array).
-    """
-    # Compute pairwise squared Euclidean distances using JAX functions
-    X_squared = jnp.square(high_dimensional_data)
-    sum_X = jnp.sum(X_squared, axis=1)
-    pairwise_distances = -2 * jnp.dot(high_dimensional_data, high_dimensional_data.T) + sum_X[:, jnp.newaxis] + sum_X
-    return pairwise_distances
-
-def initialize_embeddings(high_dimensional_data, num_dimensions, rand_key):
-    init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
-    init_cov = jnp.eye(num_dimensions, dtype=jnp.float32) * 1e-4
-    embeddings = random.multivariate_normal(rand_key, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
-    return embeddings
-
-# Create a closure to encapsulate the non-hashable random key
-def initialize_embeddings_with_key(high_dimensional_data, num_dimensions, rand_key):
-    return initialize_embeddings(high_dimensional_data, num_dimensions, rand_key)
-
-
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       target_perplexity, max_iterations=100,
                                       learning_rate=100, scaling_factor=4.,
                                       pbar=False, random_state=None,
                                       perp_tol=1e-8):
-    def body(args):
-        t, Y = args
-        Y_dist_mat = compute_pairwise_distances(Y)
-        Q = low_dim_affinities(Y, Y_dist_mat)
-        Q = jnp.clip(Q, EPSILON, None)
-        grad = compute_grad(P, Q, Y, Y_dist_mat)
-        Y = Y - learning_rate * grad + momentum_func(t) * (Y - Y_old)
-        return t + 1, Y
 
     # Ensure the random key is generated correctly
     if random_state is None:
@@ -219,41 +195,50 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
     init_cov = jnp.eye(num_dimensions, dtype=jnp.float32) * 1e-4
 
+    # Ensure the random key is generated correctly
+    if random_state is None:
+        rand = random.PRNGKey(42)
+    else:
+        rand = random_state
     Y = random.multivariate_normal(rand, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
-
-    # initialize_embeddings_jit = jax.jit(initialize_embeddings, static_argnums=(1,))
-    # # Call the JIT-compiled function with appropriate arguments
-    #
-    # Y = initialize_embeddings_jit(high_dimensional_data, num_dimensions, rand)
 
     Y_old = jnp.zeros_like(Y)
 
-    # Define the condition function for the while loop
-    def condition(args):
-        t, _ = args
-        return t < max_iterations
+    iter_range = range(max_iterations)
+    if pbar:
+        iter_range = tqdm(iter_range, "Iterations")
+    for t in iter_range:
+        Y_dist_mat = compute_pairwise_distances(Y)
+        Q = low_dim_affinities(Y, Y_dist_mat)
+        Q = jnp.clip(Q, EPSILON, None)
+        grad = compute_grad(P, Q, Y, Y_dist_mat)
+        Y = Y - learning_rate * grad + momentum_func(t) * (Y - Y_old)
+        Y_old = Y.copy()
+        if t == 100:
+            P = P / scaling_factor
+            pass
+        pass
 
-    _, Y = jax.lax.while_loop(condition, body, (0, Y))
 
     return Y
-
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from sklearn.datasets import load_digits
-import numpy as np
-
-plt.style.use("seaborn-whitegrid")
-rcParams["font.size"] = 18
-rcParams["figure.figsize"] = (12, 8)
-
-
-digits, digit_class = load_digits(return_X_y=True)
-rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-data = digits[rand_idx, :].copy()
-classes = digit_class[rand_idx]
-
-low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, 100, pbar=True)
-
-scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
-plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-plt.show()
+#
+# import matplotlib.pyplot as plt
+# from matplotlib import rcParams
+# from sklearn.datasets import load_digits
+# import numpy as np
+#
+# plt.style.use("seaborn-whitegrid")
+# rcParams["font.size"] = 18
+# rcParams["figure.figsize"] = (12, 8)
+#
+#
+# digits, digit_class = load_digits(return_X_y=True)
+# rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+# data = digits[rand_idx, :].copy()
+# classes = digit_class[rand_idx]
+#
+# low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, 100, pbar=True)
+#
+# scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
+# plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+# plt.show()
