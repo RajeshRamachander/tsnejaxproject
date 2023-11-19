@@ -114,8 +114,8 @@ def compute_probabilities_from_ntk(data, dist_mat, sigmas, layer_size=512):
     ntk_matrix = compute_ntk_matrix(data)
 
     # Scale NTK values by a Gaussian function of the distance
-    # scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat ** 2 / (2 * sigmas ** 2))
-    scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat/(2*sigmas**2))
+    scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat ** 2 / (2 * sigmas ** 2))
+    # scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat/(2*sigmas**2))
 
     # Convert NTK to similarities
     similarities = 1 / (1 + scaled_ntk_matrix)
