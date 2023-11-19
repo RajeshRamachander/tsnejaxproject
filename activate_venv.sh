@@ -1,2 +1,2 @@
 #!/bin/bash
-source ./venvPython3.9.10/bin/activate
+source ./venvPython3.11.6/bin/activate
