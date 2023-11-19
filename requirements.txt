@@ -1,0 +1,8 @@
+jax
+jaxlib
+tqdm
+matplotlib
+neural-tangents
+scikit-learn
+jupyter
+ipykernel
