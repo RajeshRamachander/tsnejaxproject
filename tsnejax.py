@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from jax import jit
 from tqdm import tqdm
 from neural_tangents import stax
+from jax.experimental import host_callback
 
 
 EPSILON = 1e-12
@@ -113,7 +114,8 @@ def compute_probabilities_from_ntk(data, dist_mat, sigmas, layer_size=512):
     ntk_matrix = compute_ntk_matrix(data)
 
     # Scale NTK values by a Gaussian function of the distance
-    scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat ** 2 / (2 * sigmas ** 2))
+    # scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat ** 2 / (2 * sigmas ** 2))
+    scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat/(2*sigmas**2))
 
     # Convert NTK to similarities
     similarities = 1 / (1 + scaled_ntk_matrix)
@@ -153,11 +155,10 @@ def compute_pairwise_probabilities(dist_mat, sigmas):
 
     # Set the diagonal to zero
     P = P.at[jnp.diag_indices_from(P)].set(0)
-
     return P
 
-@jit
-def pairwise_affinities(data, sigmas, dist_mat, use_ntk=True):
+# @jit
+def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
     """Calculates the pairwise affinities p_{j|i} using the given values of sigma
 
     Parameters:
@@ -173,17 +174,18 @@ def pairwise_affinities(data, sigmas, dist_mat, use_ntk=True):
     assert data.shape[0] == sigmas.shape[0] == dist_mat.shape[0], "Inconsistent dimensions"
     assert sigmas.shape[1] == 1, "Sigmas must be a column array"
 
-
     def true_fun(_):
+        host_callback.id_print(use_ntk, what="use_ntk")
         return compute_probabilities_from_ntk(data, dist_mat, sigmas)
 
     def false_fun(_):
+        host_callback.id_print(use_ntk, what="use_ntk")
         return compute_pairwise_probabilities(dist_mat, sigmas)
 
     return jax.lax.cond(use_ntk, true_fun, false_fun, None)
 
 @jit
-def all_sym_affinities(data, perp, tol,  use_ntk=True, attempts=100):
+def all_sym_affinities(data, perp, tol,  use_ntk, attempts=100):
     dist_mat = compute_pairwise_distances(data)
     sigma_maxs = jnp.full(data.shape[0], 1e12)
     sigma_mins = jnp.full(data.shape[0], 1e-12)
