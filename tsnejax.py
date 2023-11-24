@@ -60,32 +60,7 @@ def fill_diagonal(arr, value):
 
 
 @jit
-def compute_ntk_matrix(inputs, layer_size=512):
-    """
-    Computes the Neural Tangent Kernel (NTK) for a simple neural network
-    between all points in the input array.
-
-    Parameters:
-    inputs (jax.numpy.DeviceArray): A JAX array of input data points.
-    layer_size (int): The size of each hidden layer in the neural network.
-
-    Returns:
-    jax.numpy.DeviceArray: The computed NTK matrix.
-    """
-
-    # Define the neural network
-    init_fn, apply_fn, kernel_fn = stax.serial(
-        stax.Dense(layer_size), stax.Relu(),
-        stax.Dense(layer_size), stax.Relu(),
-        stax.Dense(1)
-    )
-
-    # Compute the neural tangent kernel
-    ntk_matrix = kernel_fn(inputs, inputs, 'ntk')
-
-    return ntk_matrix
-
-def compute_probabilities_from_ntk(data, dist_mat, sigmas, layer_size=512):
+def compute_probabilities_from_ntk(data):
     """
     Computes a probability matrix from input data using a scaled Neural Tangent Kernel (NTK).
 
@@ -101,34 +76,49 @@ def compute_probabilities_from_ntk(data, dist_mat, sigmas, layer_size=512):
 
     # Define a function to compute the NTK matrix
     def compute_ntk_matrix(inputs):
-        # Define the neural network
+
+        # Reshape the data for the convolutional network
+        X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
+        X = X / 16.0  # Normalize pixel values
+
+        # Define your neural network architecture
         init_fn, apply_fn, kernel_fn = stax.serial(
-            stax.Dense(layer_size), stax.Relu(),
-            stax.Dense(layer_size), stax.Relu(),
-            stax.Dense(1)
+            stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
+            stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
+            stax.Flatten(),
+            stax.Dense(100), stax.Relu(),
+            stax.Dense(10)
         )
+
+        # # Define your neural network architecture
+        # init_fn, apply_fn, kernel_fn = stax.serial(
+        #     stax.Dense(2048), stax.Relu(),
+        #     stax.Dense(2048), stax.Relu(),
+        #     stax.Flatten(), stax.Dense(1)
+        # )
+
         # Compute the neural tangent kernel
-        return kernel_fn(inputs, inputs, 'ntk')
+        return kernel_fn(X, X, 'ntk')
+
 
     # Compute the NTK matrix
     ntk_matrix = compute_ntk_matrix(data)
 
-    # Scale NTK values by a Gaussian function of the distance
-    scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat ** 2 / (2 * sigmas ** 2))
-    # scaled_ntk_matrix = ntk_matrix / jnp.exp(-dist_mat/(2*sigmas**2))
+    # Compute numerators
+    numers = ntk_matrix
 
-    # Convert NTK to similarities
-    similarities = 1 / (1 + scaled_ntk_matrix)
+    # Compute denominators
+    denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
+    denoms = denoms[:, None] + EPSILON  # Reshape and avoid division by zero
 
-    # Normalize each row to sum to 1
-    row_sums = similarities.sum(axis=1, keepdims=True)
-    probabilities = similarities / row_sums
+    # Calculate probabilities
+    P = numers / denoms
 
     # Set the diagonal to zero
-    probabilities = probabilities.at[jnp.diag_indices_from(probabilities)].set(0)
+    P = P.at[jnp.diag_indices_from(P)].set(0)
+    return P
 
-    return probabilities
-
+@jit
 def compute_pairwise_probabilities(dist_mat, sigmas):
     """
     Computes a pairwise probability matrix based on the distance matrix and sigma values.
@@ -157,7 +147,7 @@ def compute_pairwise_probabilities(dist_mat, sigmas):
     P = P.at[jnp.diag_indices_from(P)].set(0)
     return P
 
-# @jit
+@jit
 def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
     """Calculates the pairwise affinities p_{j|i} using the given values of sigma
 
@@ -176,7 +166,7 @@ def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
 
     def true_fun(_):
         host_callback.id_print(use_ntk, what="use_ntk")
-        return compute_probabilities_from_ntk(data, dist_mat, sigmas)
+        return compute_probabilities_from_ntk(data)
 
     def false_fun(_):
         host_callback.id_print(use_ntk, what="use_ntk")
