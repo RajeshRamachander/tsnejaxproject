@@ -6,4 +6,4 @@ neural-tangents
 scikit-learn
 jupyter
 ipykernel
-optax
+optaxclea
