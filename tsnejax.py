@@ -312,48 +312,48 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
 
     return Y
 
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from sklearn.datasets import load_digits
-import numpy as np
+# import matplotlib.pyplot as plt
+# from matplotlib import rcParams
+# from sklearn.datasets import load_digits
+# import numpy as np
 
 
-rcParams["font.size"] = 18
-rcParams["figure.figsize"] = (12, 8)
+# rcParams["font.size"] = 18
+# rcParams["figure.figsize"] = (12, 8)
 
 
-digits, digit_class = load_digits(return_X_y=True)
-rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-data = digits[rand_idx, :].copy()
-classes = digit_class[rand_idx]
+# digits, digit_class = load_digits(return_X_y=True)
+# rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+# data = digits[rand_idx, :].copy()
+# classes = digit_class[rand_idx]
 
-low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, \
-                                            100, pbar=True, use_ntk=False)
+# low_dim = compute_low_dimensional_embedding(data, 2, 30, 500, \
+#                                             100, pbar=True, use_ntk=False)
 
 
-scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
-plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-plt.show()
+# scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
+# plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+# plt.show()
 
-import jax
-import jax.numpy as jnp
+# import jax
+# import jax.numpy as jnp
 
-# Get a list of available JAX devices (CPUs and GPUs)
-devices = jax.devices()
+# # Get a list of available JAX devices (CPUs and GPUs)
+# devices = jax.devices()
 
-# Check if there are any GPU devices available
-gpu_devices = [device for device in devices if 'gpu' in device.device_kind.lower()]
+# # Check if there are any GPU devices available
+# gpu_devices = [device for device in devices if 'gpu' in device.device_kind.lower()]
 
-if gpu_devices:
-    # Choose the first GPU (you can select a specific GPU by index)
-    selected_gpu = gpu_devices[0]
-    print(f"Selected GPU Device: {selected_gpu}")
+# if gpu_devices:
+#     # Choose the first GPU (you can select a specific GPU by index)
+#     selected_gpu = gpu_devices[0]
+#     print(f"Selected GPU Device: {selected_gpu}")
 
-    # Set the JAX device to the selected GPU
-    jax.device(selected_gpu)
-else:
-    print("No GPU devices available. Using CPU.")
+#     # Set the JAX device to the selected GPU
+#     jax.device(selected_gpu)
+# else:
+#     print("No GPU devices available. Using CPU.")
 
-# Your code goes here
-# Perform computations using JAX as usual
-# JAX will use the selected GPU for computation if available
+# # Your code goes here
+# # Perform computations using JAX as usual
+# # JAX will use the selected GPU for computation if available
