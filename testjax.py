@@ -1,38 +1,14 @@
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from sklearn.datasets import load_digits
-import numpy as np
-import tsnejax as tj
-
-
-rcParams["font.size"] = 18
-rcParams["figure.figsize"] = (12, 8)
-
-
-digits, digit_class = load_digits(return_X_y=True)
-rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-data = digits[rand_idx, :].copy()
-classes = digit_class[rand_idx]
-
-low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \
-                                            100, pbar=True, use_ntk=False)
-
-
-scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
-plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-plt.show()
 
 import requests
-import numpy as np
-from sklearn.datasets import load_digits
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from sklearn.datasets import load_digits
+import numpy as np
 
-# Set plotting parameters
 rcParams["font.size"] = 18
 rcParams["figure.figsize"] = (12, 8)
 
-# Load data from load_digits
+# Load data
 digits, digit_class = load_digits(return_X_y=True)
 rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
 data = digits[rand_idx, :].copy()
@@ -44,7 +20,7 @@ payload = {
     'n_components': 2,
     'perplexity': 30,
     'learning_rate': 500,
-    'n_iter': 1000,
+    'n_iter': 100,
     'pbar': True,
     'use_ntk': False
 }
@@ -52,32 +28,57 @@ payload = {
 # URL of the Flask app
 url = 'http://localhost:3000/compute_embedding'
 
-try:
-    # Send POST request to the Flask app with a timeout
-    response = requests.post(url, json=payload, timeout=10)
+# Send POST request
+response = requests.post(url, json=payload)
 
-    # Process the response
-    if response.status_code == 200:
-        low_dim = np.array(response.json())
-        # Plotting
-        scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
-        plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-        plt.show()
-    else:
-        print("Failed to get response from the server:", response.status_code)
-        # Optionally print more details from the response
-        print(response.text)
+# Check if the request was successful
+if response.status_code == 200:
+    # Parse the JSON response
+    low_dim = np.array(response.json())
 
-except requests.exceptions.ConnectionError:
-    print("Failed to connect to the server. Please check the URL and ensure the server is running.")
-except requests.exceptions.Timeout:
-    print("Request timed out. The server might be too slow or unresponsive.")
-except requests.exceptions.RequestException as e:
-    # For any other exceptions that requests might raise
-    print(f"An error occurred: {e}")
+    # Plotting
+    scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=classes)
+    plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+    plt.show()
+else:
+    print("Failed to get a successful response:", response.status_code)
+    print(response.text)
 
 
-# import requests
 
-# response = requests.get('http://localhost:3000/')
-# print(response.text)
+
+
+
+
+
+# app = Flask(__name__)
+
+# @app.route('/compute_embedding', methods=['POST'])
+# def compute_embedding():
+#     content = request.json
+#     if not content or 'data' not in content:
+#         return jsonify({"error": "Missing 'data' in request"}), 400
+
+#     data = np.array(content['data'])  # Convert list to NumPy array
+#     # Add validation for 'data' if necessary, e.g., check type, format
+
+#     # Default values are used if parameters are not provided
+#     n_components = content.get('n_components', 2)
+#     perplexity = content.get('perplexity', 30)
+#     learning_rate = content.get('learning_rate', 500)
+#     n_iter = content.get('n_iter', 100)
+#     pbar = content.get('pbar', True)
+#     use_ntk = content.get('use_ntk', False)
+
+#     try:
+#         # Call your processing function
+#         result = compute_low_dimensional_embedding(data, n_components, perplexity, learning_rate, n_iter, pbar, use_ntk)
+#         return jsonify(result.tolist())
+#     except Exception as e:
+#         # Handle exceptions and return an error message
+#         return jsonify({"error": str(e)}), 500
+
+
+
+# if __name__ == "__main__":
+#     app.run(host='0.0.0.0', port=3000)
