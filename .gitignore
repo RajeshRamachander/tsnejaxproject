@@ -18,3 +18,10 @@ __pycache__/tsnenumpy.cpython-311.pyc
 *.patch
 __pycache__/tsnejax.cpython-39.pyc
 __pycache__/tsnenumpy.cpython-39.pyc
+.dvcignore
+.dvc/config
+.dvcignore
+.dvc/config
+.dvcignore
+*.db
+.dvcignore
