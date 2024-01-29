@@ -44,16 +44,19 @@ class LoggingDataProcessor(DataProcessorStrategy):
 class WorkerDataProcessor(DataProcessorStrategy):
 
     def process_data(self, data):
+        data_array = np.array(data_args['data'])
+        num_dimensions = data_args['num_dimensions']
+        perplexity = data_args['perplexity']
+        num_iterations = data_args['num_iterations']
+        learning_rate = data_args['learning_rate']
+        batch_size = data_args['batch_size']
+        pbar = data_args['pbar']
+        use_ntk = data_args['use_ntk']
 
-
-        self.logger.info(f"Type of low_dim: {type(data)}")
-        self.logger.info(f"Low_dim data (partial view): {data[:10]}")
-        data_array = np.array(data)
-
-        self.logger.info(f"Shape of data: {data_array.shape}")
-
-        low_dim = tj.compute_low_dimensional_embedding(data_array, 2, 30, 500, \
-                                                       100, pbar=True, use_ntk=False)
+        low_dim = tj.compute_low_dimensional_embedding(
+            data_array, num_dimensions, perplexity, num_iterations,
+            learning_rate, pbar=pbar, use_ntk=use_ntk
+        )
 
         # Convert to list for serialization
         low_dim_list = low_dim.tolist()
@@ -95,7 +98,19 @@ if __name__ == "__main__":
     digits, digit_class = load_digits(return_X_y=True)
     rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
     data = digits[rand_idx, :]
-    total2 = task_worker.process_data(data)
+
+    data_args = {
+        'data': data,
+        'num_dimensions': 2,
+        'perplexity': 30,
+        'num_iterations': 500,
+        'learning_rate': 100,
+        'batch_size': 100,
+        'pbar': True,
+        'use_ntk': False
+    }
+
+    total2 = task_worker.process_data(data_args)
 
     print(f"Total (Logger Strategy): {total1}")
     print(f"Total (Worker Strategy): {total2}")
