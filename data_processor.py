@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from sklearn.datasets import load_digits
 import numpy as np
-import tsnejax as tj
 import ast
 
 class DataProcessor(ABC):

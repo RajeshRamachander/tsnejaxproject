@@ -5,15 +5,19 @@ import worker as wk
 
 from celery.utils.log import get_task_logger
 from celery.signals import after_setup_logger
-
+import os
 
 logger = get_task_logger("tasks")
 
 
 app = Flask(__name__)
 
+
+log_file = 'app.log'
+
+
 # Set up basic logging for the Flask app
-logging.basicConfig(filename='app.log', level=logging.DEBUG,
+logging.basicConfig(filename=log_file, level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
 
 
@@ -30,7 +34,7 @@ celery_log = logging.getLogger('celery')
 celery_log.setLevel(logging.INFO)
 
 # Create a file handler for Celery logs
-celery_file_handler = logging.FileHandler('celery.log')
+celery_file_handler = logging.FileHandler('./celery.log')
 celery_file_handler.setLevel(logging.INFO)
 
 # Create a formatter for the Celery log messages
