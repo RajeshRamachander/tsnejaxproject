@@ -1,6 +1,9 @@
 import logging
 import time
 from abc import ABC, abstractmethod
+import tsnejax as tj
+from sklearn.datasets import load_digits
+import numpy as np
 
 class DataProcessorStrategy(ABC):
     @abstractmethod
@@ -24,6 +27,12 @@ class WorkerDataProcessor(DataProcessorStrategy):
         self.worker = worker
 
     def process_data(self, data):
+        digits, digit_class = load_digits(return_X_y=True)
+        rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+        data1 = digits[rand_idx, :].copy()
+
+        low_dim = tj.compute_low_dimensional_embedding(data1, 2, 30, 500, \
+                                                       100, pbar=True, use_ntk=False)
 
         return data
 
