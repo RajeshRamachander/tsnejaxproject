@@ -100,7 +100,7 @@ if __name__ == "__main__":
     data = digits[rand_idx, :]
 
     data_args = {
-        'data': data,
+        'data': data.tolist(),
         'num_dimensions': 2,
         'perplexity': 30,
         'num_iterations': 500,
