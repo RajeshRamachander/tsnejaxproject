@@ -1,4 +1,3 @@
-import logging
 import time
 from abc import ABC, abstractmethod
 import tsnejax as tj
@@ -8,8 +7,17 @@ import numpy as np
 # In some other module
 import logging
 
-logger = logging.getLogger('woker')
-logger.info('This log is from worker module')
+logger = logging.getLogger('worker')
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('worker.log')
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+def some_function():
+    logger.info("This is an info message")
+
 
 
 class DataProcessorStrategy(ABC):
@@ -18,8 +26,9 @@ class DataProcessorStrategy(ABC):
         pass
 
 class LoggingDataProcessor(DataProcessorStrategy):
-    def __init__(self, logger):
+    def __init__(self, logger,worker):
         self.logger = logger
+        self.worker = worker
 
     def process_data(self, data):
         total = 0
@@ -30,24 +39,26 @@ class LoggingDataProcessor(DataProcessorStrategy):
         return total
 
 class WorkerDataProcessor(DataProcessorStrategy):
-    def __init__(self, worker):
+    def __init__(self, logger,worker):
         self.worker = worker
         self.logger = logger
 
     def process_data(self, data):
+        self.logger.info(f"Type of low_dim: {type(data)}")
+        self.logger.info(f"Low_dim data (partial view): {data[:10]}")
+
+        if isinstance(data, list):
+            data = np.array(data)
+
         digits, digit_class = load_digits(return_X_y=True)
         rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
         data1 = digits[rand_idx, :].copy()
 
-        low_dim = tj.compute_low_dimensional_embedding(data1, 2, 30, 500, \
+        low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \
                                                        100, pbar=True, use_ntk=False)
 
         # Convert to list for serialization
         low_dim_list = low_dim.tolist()
-
-        # Log the type and possibly some information about low_dim
-        self.logger.info(f"Type of low_dim: {type(low_dim)}")
-        self.logger.info(f"Low_dim data (partial view): {low_dim_list[:10]}")  # Log only the first 10 items for brevity
 
         return low_dim_list  # Return the serializable list
 

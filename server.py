@@ -41,21 +41,22 @@ def process_data(self, data):
     #     total += number
     # return total
 
-    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(wk.Worker()))
+    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log,wk.Worker()))
 
     return task_worker.process_data(data)
 
 
 @app.route('/')
-def home():
+def hello_world():
     app.logger.info('Info level log')
     app.logger.warning('Warning level log')
-    return "Check your logs"
+    return 'Hello, World!'
 
 @app.route('/start-task', methods=['POST'])
 def start_task():
     json_data = request.get_json()
     data = json_data['data']
+
     task = process_data.delay(data)
     return jsonify({'task_id': task.id}), 202
 
