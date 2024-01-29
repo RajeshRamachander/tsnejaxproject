@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from celery import Celery
 import time
 import logging
+import worker as wk
 
 app = Flask(__name__)
 # app.config['CELERY_BROKER_URL'] = 'pyamqp://guest@localhost//'
@@ -24,20 +25,24 @@ celery_log.addHandler(file_handler)
 
 @celery.task(bind=True)
 def process_data(self, data):
-    total = 0
-    for number in data:
-        # Log messages using Python's logging module
-        celery_log.info(f"Processing number: {number}")
+    # total = 0
+    # for number in data:
+    #     # Log messages using Python's logging module
+    #     celery_log.info(f"Processing number: {number}")
+    #
+    #     # Simulate a time-consuming operation
+    #     time.sleep(1)
+    #     total += number
+    # return total
 
-        # Simulate a time-consuming operation
-        time.sleep(1)
-        total += number
-    return total
+    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(wk.Worker()))
+
+    return task_worker.process_data(data)
 
 @app.route('/start-task', methods=['POST'])
 def start_task():
-    data = request.json['data']
-    print(data)
+    json_data = request.get_json()
+    data = json_data['data']
     task = process_data.delay(data)
     return jsonify({'task_id': task.id}), 202
 
@@ -47,6 +52,40 @@ def task_status(task_id):
     if result.ready():
         return jsonify({'status': 'completed', 'result': result.get()})
     return jsonify({'status': 'processing'}), 202
+
+# @app.route('/task-status/<task_id>', methods=['GET'])
+# def task_status(task_id):
+#     task = process_data.AsyncResult(task_id)
+#
+#     if task.state == 'PENDING':
+#         # Task is still processing
+#         response = {
+#             'state': task.state,
+#             'status': 'Task is still processing'
+#         }
+#     elif task.state == 'SUCCESS':
+#         # Task completed successfully
+#         response = {
+#             'state': task.state,
+#             'status': 'Task completed successfully',
+#             'result': task.result  # Directly use task.result
+#         }
+#     elif task.state == 'FAILURE':
+#         # Task failed
+#         response = {
+#             'state': task.state,
+#             'status': 'Task failed',
+#             'error': str(task.info)  # Error information
+#         }
+#     else:
+#         # Task is in an unknown state
+#         response = {
+#             'state': task.state,
+#             'status': 'Task is in an unknown state'
+#         }
+#
+#     return jsonify(response)
+
 
 if __name__ == '__main__':
     print("Flask app is starting...")

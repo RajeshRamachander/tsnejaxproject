@@ -1,9 +1,9 @@
 from server_communication import ServerCommunicator
-from data_processor import DataProcessor
+from data_processor import DataProcessor, SimpleDataProcessor
 
 if __name__ == '__main__':
     server_communicator = ServerCommunicator()
-    data_processor = DataProcessor()
+    data_processor = SimpleDataProcessor()
 
     main_data = data_processor.prepare_data()
 
@@ -15,5 +15,7 @@ if __name__ == '__main__':
 
         processed_result = data_processor.wait_for_completion(task_id, server_communicator)
         print(processed_result)
+
+        data_processor.output_data_processor(processed_result)
     else:
         print(f'Error starting the task: {response.status_code}')
