@@ -56,7 +56,7 @@ class SimpleDataProcessor(DataProcessor):
         # Implement specific data processing logic
         digits, digit_class = load_digits(return_X_y=True)
         rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-        data = digits[rand_idx, :].copy()
+        data = digits[rand_idx, :]
         self.classes = digit_class[rand_idx]
 
         # low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \

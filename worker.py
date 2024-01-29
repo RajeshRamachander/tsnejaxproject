@@ -4,31 +4,34 @@ import tsnejax as tj
 from sklearn.datasets import load_digits
 import numpy as np
 
-# In some other module
 import logging
 
-logger = logging.getLogger('worker')
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler('worker.log')
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+# Set up logging for the background worker
+worker_log = logging.getLogger('worker')
+worker_log.setLevel(logging.INFO)
 
-def some_function():
-    logger.info("This is an info message")
+# Create a file handler for worker logs (use celery.log)
+worker_file_handler = logging.FileHandler('celery.log')
+worker_file_handler.setLevel(logging.INFO)
 
+# Create a formatter for the worker log messages
+worker_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+worker_file_handler.setFormatter(worker_formatter)
+
+# Add the file handler to the worker logger
+worker_log.addHandler(worker_file_handler)
 
 
 class DataProcessorStrategy(ABC):
+    def __init__(self, logger, worker):
+        self.logger = logger
+        self.worker = worker
+
     @abstractmethod
     def process_data(self, data):
         pass
 
 class LoggingDataProcessor(DataProcessorStrategy):
-    def __init__(self, logger,worker):
-        self.logger = logger
-        self.worker = worker
 
     def process_data(self, data):
         total = 0
@@ -39,22 +42,17 @@ class LoggingDataProcessor(DataProcessorStrategy):
         return total
 
 class WorkerDataProcessor(DataProcessorStrategy):
-    def __init__(self, logger,worker):
-        self.worker = worker
-        self.logger = logger
 
     def process_data(self, data):
+
+
         self.logger.info(f"Type of low_dim: {type(data)}")
         self.logger.info(f"Low_dim data (partial view): {data[:10]}")
+        data_array = np.array(data)
 
-        if isinstance(data, list):
-            data = np.array(data)
+        self.logger.info(f"Shape of data: {data_array.shape}")
 
-        digits, digit_class = load_digits(return_X_y=True)
-        rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
-        data1 = digits[rand_idx, :].copy()
-
-        low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \
+        low_dim = tj.compute_low_dimensional_embedding(data_array, 2, 30, 500, \
                                                        100, pbar=True, use_ntk=False)
 
         # Convert to list for serialization
@@ -84,8 +82,8 @@ if __name__ == "__main__":
     celery_log.addHandler(file_handler)
 
     worker = Worker()
-    logger_strategy = LoggingDataProcessor(celery_log)
-    worker_strategy = WorkerDataProcessor(worker)
+    logger_strategy = LoggingDataProcessor(worker_log, worker)
+    worker_strategy = WorkerDataProcessor(worker_log, worker)
 
     # Example usage:
     task_logger = CeleryTask(logger_strategy)
@@ -93,7 +91,12 @@ if __name__ == "__main__":
 
     data = [1, 2, 3, 4, 5]
     total1 = task_logger.process_data(data)
+
+    digits, digit_class = load_digits(return_X_y=True)
+    rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+    data = digits[rand_idx, :]
     total2 = task_worker.process_data(data)
 
     print(f"Total (Logger Strategy): {total1}")
     print(f"Total (Worker Strategy): {total2}")
+
