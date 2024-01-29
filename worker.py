@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 import tsnejax as tj
 from sklearn.datasets import load_digits
@@ -22,23 +23,35 @@ worker_log.addHandler(worker_file_handler)
 
 
 class DataProcessorStrategy(ABC):
-    def __init__(self, worker):
+    def __init__(self, logger, worker):
+        self.logger = logger
         self.worker = worker
 
     @abstractmethod
     def process_data(self, data):
         pass
 
-class WorkerDataProcessor(DataProcessorStrategy):
+class LoggingDataProcessor(DataProcessorStrategy):
 
     def process_data(self, data):
-        data_array = np.array(data['data'])
-        num_dimensions = data['num_dimensions']
-        perplexity = data['perplexity']
-        num_iterations = data['num_iterations']
-        learning_rate = data['learning_rate']
-        pbar = data['pbar']
-        use_ntk = data['use_ntk']
+        total = 0
+        for number in data:
+            self.logger.info(f"Processing number: {number}")
+            time.sleep(1)
+            total += number
+        return total
+
+class WorkerDataProcessor(DataProcessorStrategy):
+
+    def process_data(self, data_args):
+        data_array = np.array(data_args['data'])
+        num_dimensions = data_args['num_dimensions']
+        perplexity = data_args['perplexity']
+        num_iterations = data_args['num_iterations']
+        learning_rate = data_args['learning_rate']
+        batch_size = data_args['batch_size']
+        pbar = data_args['pbar']
+        use_ntk = data_args['use_ntk']
 
         low_dim = tj.compute_low_dimensional_embedding(
             data_array, num_dimensions, perplexity, num_iterations,
@@ -50,6 +63,11 @@ class WorkerDataProcessor(DataProcessorStrategy):
 
         return low_dim_list  # Return the serializable list
 
+# Example usage:
+class Worker:
+    def add(self, number):
+        # Simulate some worker operation
+        return number * 2
 
 class CeleryTask:
     def __init__(self, strategy):
@@ -66,9 +84,16 @@ if __name__ == "__main__":
     file_handler.setLevel(logging.INFO)
     celery_log.addHandler(file_handler)
 
-    worker_strategy = WorkerDataProcessor(worker_log)
+    worker = Worker()
+    logger_strategy = LoggingDataProcessor(worker_log, worker)
+    worker_strategy = WorkerDataProcessor(worker_log, worker)
 
+    # Example usage:
+    task_logger = CeleryTask(logger_strategy)
     task_worker = CeleryTask(worker_strategy)
+
+    data = [1, 2, 3, 4, 5]
+    total1 = task_logger.process_data(data)
 
     digits, digit_class = load_digits(return_X_y=True)
     rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
@@ -87,5 +112,6 @@ if __name__ == "__main__":
 
     total2 = task_worker.process_data(data_args)
 
+    print(f"Total (Logger Strategy): {total1}")
     print(f"Total (Worker Strategy): {total2}")
 
