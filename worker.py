@@ -34,6 +34,7 @@ class WorkerDataProcessor(DataProcessorStrategy):
         low_dim = tj.compute_low_dimensional_embedding(data1, 2, 30, 500, \
                                                        100, pbar=True, use_ntk=False)
 
+        # print(low_dim.tolist())
         return data
 
 # Example usage:

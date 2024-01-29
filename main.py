@@ -14,7 +14,7 @@ if __name__ == '__main__':
         print(f'Task started with ID: {task_id}')
 
         processed_result = data_processor.wait_for_completion(task_id, server_communicator)
-        print(processed_result)
+        # print(processed_result)
 
         data_processor.output_data_processor(processed_result)
     else:

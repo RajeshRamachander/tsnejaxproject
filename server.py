@@ -53,38 +53,6 @@ def task_status(task_id):
         return jsonify({'status': 'completed', 'result': result.get()})
     return jsonify({'status': 'processing'}), 202
 
-# @app.route('/task-status/<task_id>', methods=['GET'])
-# def task_status(task_id):
-#     task = process_data.AsyncResult(task_id)
-#
-#     if task.state == 'PENDING':
-#         # Task is still processing
-#         response = {
-#             'state': task.state,
-#             'status': 'Task is still processing'
-#         }
-#     elif task.state == 'SUCCESS':
-#         # Task completed successfully
-#         response = {
-#             'state': task.state,
-#             'status': 'Task completed successfully',
-#             'result': task.result  # Directly use task.result
-#         }
-#     elif task.state == 'FAILURE':
-#         # Task failed
-#         response = {
-#             'state': task.state,
-#             'status': 'Task failed',
-#             'error': str(task.info)  # Error information
-#         }
-#     else:
-#         # Task is in an unknown state
-#         response = {
-#             'state': task.state,
-#             'status': 'Task is in an unknown state'
-#         }
-#
-#     return jsonify(response)
 
 
 if __name__ == '__main__':
