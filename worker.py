@@ -5,6 +5,13 @@ import tsnejax as tj
 from sklearn.datasets import load_digits
 import numpy as np
 
+# In some other module
+import logging
+
+logger = logging.getLogger('woker')
+logger.info('This log is from worker module')
+
+
 class DataProcessorStrategy(ABC):
     @abstractmethod
     def process_data(self, data):
@@ -25,6 +32,7 @@ class LoggingDataProcessor(DataProcessorStrategy):
 class WorkerDataProcessor(DataProcessorStrategy):
     def __init__(self, worker):
         self.worker = worker
+        self.logger = logger
 
     def process_data(self, data):
         digits, digit_class = load_digits(return_X_y=True)
@@ -34,8 +42,14 @@ class WorkerDataProcessor(DataProcessorStrategy):
         low_dim = tj.compute_low_dimensional_embedding(data1, 2, 30, 500, \
                                                        100, pbar=True, use_ntk=False)
 
-        # print(low_dim.tolist())
-        return data
+        # Convert to list for serialization
+        low_dim_list = low_dim.tolist()
+
+        # Log the type and possibly some information about low_dim
+        self.logger.info(f"Type of low_dim: {type(low_dim)}")
+        self.logger.info(f"Low_dim data (partial view): {low_dim_list[:10]}")  # Log only the first 10 items for brevity
+
+        return low_dim_list  # Return the serializable list
 
 # Example usage:
 class Worker:

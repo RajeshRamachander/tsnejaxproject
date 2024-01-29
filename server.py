@@ -5,6 +5,11 @@ import logging
 import worker as wk
 
 app = Flask(__name__)
+
+# Set up basic logging
+logging.basicConfig(filename='app.log', level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
+
 # app.config['CELERY_BROKER_URL'] = 'pyamqp://guest@localhost//'
 # app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/3'  # Use your Redis server details here
 
@@ -20,6 +25,7 @@ celery_log.setLevel(logging.INFO)  # Set the desired log level
 
 # Configure a file handler for Celery logs
 file_handler = logging.FileHandler('celery.log')  # Specify the log file name
+
 file_handler.setLevel(logging.INFO)  # Set the desired log level
 celery_log.addHandler(file_handler)
 
@@ -38,6 +44,13 @@ def process_data(self, data):
     task_worker = wk.CeleryTask(wk.WorkerDataProcessor(wk.Worker()))
 
     return task_worker.process_data(data)
+
+
+@app.route('/')
+def home():
+    app.logger.info('Info level log')
+    app.logger.warning('Warning level log')
+    return "Check your logs"
 
 @app.route('/start-task', methods=['POST'])
 def start_task():

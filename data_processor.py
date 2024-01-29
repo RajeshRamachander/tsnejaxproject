@@ -59,13 +59,12 @@ class SimpleDataProcessor(DataProcessor):
         data = digits[rand_idx, :].copy()
         self.classes = digit_class[rand_idx]
 
-        low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \
-                                                       100, pbar=True, use_ntk=False)
-
+        # low_dim = tj.compute_low_dimensional_embedding(data, 2, 30, 500, \
+        #                                                100, pbar=True, use_ntk=False)
+        #
         transmit_data = {
-            'data': low_dim.tolist()  # Replace with your own data
+            'data': data.tolist()  # Replace with your own data
         }
-
 
         return transmit_data
 
