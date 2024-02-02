@@ -62,7 +62,7 @@ def process_data(self, data):
 
     logger.info('Calling app.process_data')
 
-    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log,wk.Worker()))
+    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log))
 
     return task_worker.process_data(data)
 
@@ -82,10 +82,7 @@ def start_task():
 
     app.logger.info(f"Type of low_dim: {type(data)}")
     app.logger.info(f"Low_dim data (partial view): {data[:10]}")
-
-    celery_log.info('Calling app.process_data')
-
-    task = process_data.delay(data)
+    task = process_data.delay(json_data)
     return jsonify({'task_id': task.id}), 202
 
 @app.route('/task-status/<task_id>', methods=['GET'])
