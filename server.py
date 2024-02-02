@@ -56,6 +56,9 @@ def start_task():
     json_data = request.get_json()
     data = json_data['data']
 
+    if data is None:
+        return jsonify({'error': 'Data not provided in the request'}), 400
+
     app.logger.info(f"Type of low_dim: {type(data)}")
     app.logger.info(f"Low_dim data (partial view): {data[:10]}")
 
@@ -69,7 +72,6 @@ def task_status(task_id):
     if result.ready():
         return jsonify({'status': 'completed', 'result': result.get()})
     return jsonify({'status': 'processing'}), 202
-
 
 
 if __name__ == '__main__':
