@@ -1,4 +1,3 @@
-import time
 from abc import ABC, abstractmethod
 import tsnejax as tj
 from sklearn.datasets import load_digits

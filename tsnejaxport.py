@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import numpy as np
-from app import tsnejax
+import tsnejax
 
 app = Flask(__name__)
 
