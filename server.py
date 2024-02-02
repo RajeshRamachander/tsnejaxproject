@@ -5,19 +5,15 @@ import worker as wk
 
 from celery.utils.log import get_task_logger
 from celery.signals import after_setup_logger
-import os
+
 
 logger = get_task_logger("tasks")
 
 
 app = Flask(__name__)
 
-
-log_file = 'app.log'
-
-
 # Set up basic logging for the Flask app
-logging.basicConfig(filename=log_file, level=logging.DEBUG,
+logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
 
 
@@ -34,7 +30,7 @@ celery_log = logging.getLogger('celery')
 celery_log.setLevel(logging.INFO)
 
 # Create a file handler for Celery logs
-celery_file_handler = logging.FileHandler('./celery.log')
+celery_file_handler = logging.FileHandler('celery.log')
 celery_file_handler.setLevel(logging.INFO)
 
 # Create a formatter for the Celery log messages
@@ -62,7 +58,7 @@ def process_data(self, data):
 
     logger.info('Calling app.process_data')
 
-    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log))
+    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log,wk.Worker()))
 
     return task_worker.process_data(data)
 
@@ -82,6 +78,9 @@ def start_task():
 
     app.logger.info(f"Type of low_dim: {type(data)}")
     app.logger.info(f"Low_dim data (partial view): {data[:10]}")
+
+    celery_log.info('Calling app.process_data')
+
     task = process_data.delay(json_data)
     return jsonify({'task_id': task.id}), 202
 
