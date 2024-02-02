@@ -69,10 +69,30 @@ def start_task():
 @app.route('/task-status/<task_id>', methods=['GET'])
 def task_status(task_id):
     result = process_data.AsyncResult(task_id)
-    if result.ready():
-        return jsonify({'status': 'completed', 'result': result.get()})
+    if result.state == 'SUCCESS':
+        return jsonify({'status': 'success', 'result': result.get()})
+    elif result.status == 'FAILURE':
+        return jsonify({'status': 'failure'}), 202
+
     return jsonify({'status': 'processing'}), 202
 
+#
+# @app.route('/task-status/<task_id>', methods=['GET'])
+# def task_status(task_id):
+#     result = process_data.AsyncResult(task_id)
+#
+#     if result.state == 'PENDING':
+#         response = {'status': 'pending', 'message': 'The task is waiting to start.'}
+#     elif result.state == 'STARTED':
+#         response = {'status': 'started', 'message': 'The task is currently in progress.'}
+#     elif result.state == 'SUCCESS':
+#         response = {'status': 'completed', 'result': result.result}
+#     elif result.state == 'FAILURE':
+#         response = {'status': 'failed', 'message': 'The task has failed. Check logs for details.'}
+#     else:
+#         response = {'status': 'unknown', 'message': 'The task status is unknown.'}
+#
+#     return jsonify(response), 200 if result.ready() else 202
 
 if __name__ == '__main__':
     print("Flask app is starting...")

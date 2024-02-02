@@ -30,7 +30,7 @@ class DataProcessor(ABC):
             status_data = server_communicator.check_task_status(task_id)
             status = status_data['status']
 
-            if status == 'completed':
+            if status == 'success':
                 result = status_data['result']
                 return self.process_result(result)
             elif status == 'processing':
@@ -73,20 +73,22 @@ class SimpleDataProcessor(DataProcessor):
 
     def output_data_processor(self, processed_result):
 
-        # Remove the non-literal part of the string
-        result_received = processed_result.replace("Result received: ", "")
+        if processed_result is not None:
 
-        # Now convert the string back to a Python object (list of lists)
-        low_dim = ast.literal_eval(result_received)
+            # Remove the non-literal part of the string
+            result_received = processed_result.replace("Result received: ", "")
 
-        low_dim = np.array(low_dim)
+            # Now convert the string back to a Python object (list of lists)
+            low_dim = ast.literal_eval(result_received)
+
+            low_dim = np.array(low_dim)
 
 
-        rcParams["font.size"] = 18
-        rcParams["figure.figsize"] = (12, 8)
+            rcParams["font.size"] = 18
+            rcParams["figure.figsize"] = (12, 8)
 
-        print(low_dim)
+            print(low_dim)
 
-        scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
-        plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-        plt.show()
+            scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
+            plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+            plt.show()
