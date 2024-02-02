@@ -1,4 +1,3 @@
-import time
 from abc import ABC, abstractmethod
 import tsnejax as tj
 from sklearn.datasets import load_digits
@@ -22,7 +21,6 @@ class WorkerDataProcessor(DataProcessorStrategy):
         perplexity = data_args['perplexity']
         num_iterations = data_args['num_iterations']
         learning_rate = data_args['learning_rate']
-        batch_size = data_args['batch_size']
         pbar = data_args['pbar']
         use_ntk = data_args['use_ntk']
 
