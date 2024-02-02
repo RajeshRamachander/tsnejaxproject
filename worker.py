@@ -4,42 +4,15 @@ import tsnejax as tj
 from sklearn.datasets import load_digits
 import numpy as np
 
-import logging
-
-# Set up logging for the background worker
-worker_log = logging.getLogger('worker')
-worker_log.setLevel(logging.INFO)
-
-# Create a file handler for worker logs (use celery.log)
-worker_file_handler = logging.FileHandler('celery.log')
-worker_file_handler.setLevel(logging.INFO)
-
-# Create a formatter for the worker log messages
-worker_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-worker_file_handler.setFormatter(worker_formatter)
-
-# Add the file handler to the worker logger
-worker_log.addHandler(worker_file_handler)
 
 
 class DataProcessorStrategy(ABC):
-    def __init__(self, logger, worker):
-        self.logger = logger
-        self.worker = worker
+    def __init__(self):
+        pass
 
     @abstractmethod
     def process_data(self, data):
         pass
-
-class LoggingDataProcessor(DataProcessorStrategy):
-
-    def process_data(self, data):
-        total = 0
-        for number in data:
-            self.logger.info(f"Processing number: {number}")
-            time.sleep(1)
-            total += number
-        return total
 
 class WorkerDataProcessor(DataProcessorStrategy):
 
@@ -63,11 +36,6 @@ class WorkerDataProcessor(DataProcessorStrategy):
 
         return low_dim_list  # Return the serializable list
 
-# Example usage:
-class Worker:
-    def add(self, number):
-        # Simulate some worker operation
-        return number * 2
 
 class CeleryTask:
     def __init__(self, strategy):
@@ -77,23 +45,8 @@ class CeleryTask:
         return self.strategy.process_data(data)
 
 if __name__ == "__main__":
-    # Initialize logger and worker
-    celery_log = logging.getLogger('celery')
-    celery_log.setLevel(logging.INFO)
-    file_handler = logging.FileHandler('celery.log')
-    file_handler.setLevel(logging.INFO)
-    celery_log.addHandler(file_handler)
 
-    worker = Worker()
-    logger_strategy = LoggingDataProcessor(worker_log, worker)
-    worker_strategy = WorkerDataProcessor(worker_log, worker)
 
-    # Example usage:
-    task_logger = CeleryTask(logger_strategy)
-    task_worker = CeleryTask(worker_strategy)
-
-    data = [1, 2, 3, 4, 5]
-    total1 = task_logger.process_data(data)
 
     digits, digit_class = load_digits(return_X_y=True)
     rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
@@ -110,8 +63,6 @@ if __name__ == "__main__":
         'use_ntk': False
     }
 
-    total2 = task_worker.process_data(data_args)
-
-    print(f"Total (Logger Strategy): {total1}")
-    print(f"Total (Worker Strategy): {total2}")
+    total = CeleryTask(WorkerDataProcessor()).process_data(data_args)
+    print(f"Total (Worker Strategy): {total}")
 
