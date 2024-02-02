@@ -3,19 +3,27 @@ from celery import Celery
 import logging
 import worker as wk
 
-from celery.utils.log import get_task_logger
-from celery.signals import after_setup_logger
-
-
-logger = get_task_logger("tasks")
-
 
 app = Flask(__name__)
 
-# Set up basic logging for the Flask app
-logging.basicConfig(filename='app.log', level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
+def configure_logger(logger_name, log_file):
+    """Configures a logger with a FileHandler and formatter."""
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
 
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]")
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+
+# Configure Flask's app logger
+app_logger = configure_logger("flask_app", "flask_app.log")
+
+# Configure Celery's task logger
+task_logger = configure_logger("celery_tasks", "celery_tasks.log")
 
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'  # Use your Redis server details here for the result backend
@@ -24,41 +32,13 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Set an appropriate caching tim
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
 
-# Set up Celery logger
-
-celery_log = logging.getLogger('celery')
-celery_log.setLevel(logging.INFO)
-
-# Create a file handler for Celery logs
-celery_file_handler = logging.FileHandler('celery.log')
-celery_file_handler.setLevel(logging.INFO)
-
-# Create a formatter for the Celery log messages
-celery_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-celery_file_handler.setFormatter(celery_formatter)
-
-# Add the file handler to the Celery logger
-celery_log.addHandler(celery_file_handler)
-
-# Add the Celery logger to the worker's logger handlers
-worker_logger = logging.getLogger('worker')
-worker_logger.addHandler(celery_file_handler)
-
-@after_setup_logger.connect
-def setup_celery_logger(logger, *args, **kwargs):
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger("tasks")
-    fh = logging.FileHandler('tasks.log')
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-
 @celery.task(bind=True)
 def process_data(self, data):
 
 
-    logger.info('Calling app.process_data')
+    task_logger.info('Calling app.process_data')
 
-    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(celery_log,wk.Worker()))
+    task_worker = wk.CeleryTask(wk.WorkerDataProcessor(task_logger,wk.Worker()))
 
     return task_worker.process_data(data)
 
@@ -79,7 +59,6 @@ def start_task():
     app.logger.info(f"Type of low_dim: {type(data)}")
     app.logger.info(f"Low_dim data (partial view): {data[:10]}")
 
-    celery_log.info('Calling app.process_data')
 
     task = process_data.delay(json_data)
     return jsonify({'task_id': task.id}), 202
