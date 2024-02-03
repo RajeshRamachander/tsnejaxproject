@@ -14,7 +14,7 @@ if [ "$1" == "start" ]; then
 
     # Start Celery Worker (Replace 'your_app' with your actual app name) in detached mode
     echo "Starting Celery Worker..."
-    celery -A server.celery worker --loglevel=info --detach &
+    celery -A app.server.celery worker --loglevel=info --detach &
 
     # End of script
     echo "All services started successfully."
@@ -22,10 +22,10 @@ if [ "$1" == "start" ]; then
 elif [ "$1" == "stop" ]; then
     # Stop Celery Worker
     echo "Stopping Celery Worker..."
-    pkill -f 'celery -A server.celery worker'
+    pkill -f 'celery -A app.server.celery worker'
 
     # Wait for Celery Worker to stop
-    while pgrep -f 'celery -A server.celery worker' > /dev/null; do
+    while pgrep -f 'celery -A app.server.celery worker' > /dev/null; do
       sleep 1
     done
 
