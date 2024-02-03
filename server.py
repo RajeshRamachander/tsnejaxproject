@@ -36,7 +36,7 @@ celery.conf.update(app.config)
 def process_data(self, data):
 
 
-    task_logger.info('Calling app.process_data')
+    # task_logger.info('Calling app.process_data')
 
     return wk.CeleryTask(wk.WorkerDataProcessor()).process_data(data)
 
