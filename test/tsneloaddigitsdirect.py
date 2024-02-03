@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from sklearn.datasets import load_digits
 import numpy as np
-import tsnejax as tj
+from app import tsnejax as tj
 
 rcParams["font.size"] = 18
 rcParams["figure.figsize"] = (12, 8)
