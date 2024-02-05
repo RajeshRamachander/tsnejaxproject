@@ -45,6 +45,13 @@ class CeleryTask:
 
 app = Flask(__name__)
 
+
+celery = Celery(
+    app.name,  # Use app.name for consistency
+    broker="redis://127.0.0.1:6379/0",
+    backend="redis://127.0.0.1:6379/0"
+)
+
 def configure_logger(logger_name, log_file):
     """Configures a logger with a FileHandler and formatter."""
     logger = logging.getLogger(logger_name)
@@ -58,24 +65,26 @@ def configure_logger(logger_name, log_file):
 
     logger.addHandler(file_handler)
 
-# Configure Flask's app logger
-app_logger = configure_logger("flask_app", "flask_app.log")
+    return logger
 
 # Configure Celery's task logger
 task_logger = configure_logger("celery_tasks", "celery_tasks.log")
 
-app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-app.config['result_backend'] = 'redis://localhost:6379/0'  # Use your Redis server details here for the result backend
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Set an appropriate caching time (e.g., 1 hour)
-
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
+# Configure Flask's app logger
+app_logger = configure_logger("flask_app", "flask_app.log")
+#
+# app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+# app.config['result_backend'] = 'redis://localhost:6379/0'  # Use your Redis server details here for the result backend
+# app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Set an appropriate caching time (e.g., 1 hour)
+#
+# celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+# celery.conf.update(app.config)
 
 @celery.task(name='app.server.process_data',bind=True)
 def process_data(self, data):
 
 
-    # task_logger.info('Calling app.process_data')
+    task_logger.info('Calling app.process_data')
 
     return CeleryTask(WorkerDataProcessor()).process_data(data)
 
