@@ -1,6 +1,6 @@
 from sklearn.datasets import load_digits
 import numpy as np
-from app import server as srv
+from api import server as srv
 
 
 

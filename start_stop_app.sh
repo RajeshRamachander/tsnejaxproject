@@ -6,7 +6,7 @@ PORT=7020
 # Function to start the Flask app
 start_app() {
     echo "Starting Flask app...$PORT"
-    FLASK_APP=./app/server.py FLASK_ENV=development FLASK_DEBUG=0 python -m flask run --host=0.0.0.0 --port=$PORT
+    FLASK_APP=./api/server.py FLASK_ENV=development FLASK_DEBUG=0 python -m flask run --host=0.0.0.0 --port=$PORT
     echo "Flask app started on port $PORT."
 }
 

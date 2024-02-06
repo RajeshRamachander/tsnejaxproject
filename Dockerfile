@@ -1,13 +1,15 @@
+# Use an existing Python image with Celery installed
 FROM python:3.11.6
 
-WORKDIR /app
+# Set the working directory inside the container
+WORKDIR /myapp
 
-ENV JAX_PLATFORM_NAME=cpu
+# Install any dependencies your project requires
+COPY requirements.txt /myapp/
+RUN pip install -r requirements.txt
 
-COPY . /app
+# Copy your project code into the container
+COPY ./ /myapp/
 
-RUN pip install --no-cache-dir --default-timeout=100 -r requirements.txt
-
-EXPOSE 3000
-# Command to run your application (modify this based on your application's entry point)
-CMD python tsnejax.py
+# Define the command to run when the container starts
+CMD celery -A app.server.celery worker --loglevel=info
