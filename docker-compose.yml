@@ -1,23 +1,31 @@
-version: '3.8'
-
 services:
+  web:
+    container_name: web
+    build: ./api
+    ports:
+      - "7020:7020"
+    links:
+      - redis
+    depends_on:
+      - redis
+    environment:
+      - FLASK_ENV=development
+    volumes:
+      - ./api:/app
 
   redis:
     container_name: redis
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    image: redis:5.0.5
     hostname: redis
 
   worker:
-    container_name: celeryserver
     build:
-      context: .  # Adjusted to current directory
+      context: ./api
     hostname: worker
-    entrypoint: celery
-    command: -A app.server.celery worker --loglevel=info
+    entrypoint: [ "celery" ]
+    command: [ "-A", "server.celery", "worker", "--loglevel=info" ]
     volumes:
-      - ./app:/app
+      - ./api:/app
     links:
       - redis
     depends_on:

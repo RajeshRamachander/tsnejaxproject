@@ -1,19 +1,13 @@
-FROM python:3.11.6-alpine
+FROM python:3.11.6
 
-ENV CELERY_BROKER_URL redis://redis:6379/0
-ENV CELERY_RESULT_BACKEND redis://redis:6379/0
-ENV C_FORCE_ROOT true
+WORKDIR /app
 
-ENV HOST 0.0.0.0
-ENV PORT 7020
-ENV DEBUG true
+COPY requirements.txt ./
 
-COPY . /api
-WORKDIR /api
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install -U setuptools pip
-RUN pip install -r requirements.txt
+COPY .. .
 
-EXPOSE 5001
+EXPOSE 7020
 
-CMD [ "flask", "run", "--host=0.0.0.0", "--port=5001"]
+CMD [ "python", "./server.py" ]
