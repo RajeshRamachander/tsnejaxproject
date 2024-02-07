@@ -12,24 +12,7 @@ if [ "$1" == "start" ]; then
 
     echo "Redis has started."
 
-    # Start Celery Worker (Replace 'your_app' with your actual app name) in detached mode
-    echo "Starting Celery Worker..."
-    celery -A cqueue.tasks.celery worker --loglevel=info --detach &
-
-    # End of script
-    echo "All services started successfully."
-
 elif [ "$1" == "stop" ]; then
-    # Stop Celery Worker
-    echo "Stopping Celery Worker..."
-    pkill -f 'celery -A app.server.celery worker'
-
-    # Wait for Celery Worker to stop
-    while pgrep -f 'celery -A app.server.celery worker' > /dev/null; do
-      sleep 1
-    done
-
-    echo "Celery Worker stopped."
 
     # Stop Redis
     echo "Stopping Redis..."
@@ -43,8 +26,6 @@ elif [ "$1" == "stop" ]; then
     done
 
     echo "Redis stopped."
-
-    echo "All services stopped successfully."
 
 else
     echo "Usage: $0 [start|stop]"
