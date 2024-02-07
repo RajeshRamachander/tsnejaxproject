@@ -7,12 +7,13 @@ ENV HOST 0.0.0.0
 ENV PORT 7020
 ENV DEBUG true
 
-COPY . /api
 WORKDIR /api
+COPY . /api
+
 
 RUN pip install -U setuptools pip
 RUN pip install -r requirements.txt
 
 EXPOSE 7020
 
-CMD [ "flask", "run", "--host=0.0.0.0", "--port=7020"]
+CMD [ "flask", "run",  "--host=0.0.0.0", "--port=7020"]

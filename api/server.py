@@ -1,7 +1,13 @@
 from flask import Flask, request, jsonify
 import logging
+from celery import Celery
 
-from api.celery_config import celery  # Import the Celery app instance
+celery = Celery(
+    'tasks',  # Use the app name from your Flask app
+    broker="redis://127.0.0.1:6379/0",
+    backend="redis://127.0.0.1:6379/0"
+)
+
 app = Flask(__name__)
 
 

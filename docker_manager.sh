@@ -27,7 +27,7 @@ function process_choice() {
     case $1 in
         1)
             echo "Building Docker Images..."
-            docker-compose build --no-cache
+            docker-compose build
             ;;
         2)
             echo "Starting Docker Containers..."

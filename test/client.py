@@ -7,7 +7,7 @@ import numpy as np
 import ast
 import requests
 
-BASE_URL = 'http://localhost:7020'
+BASE_URL = 'http://127.0.0.1:7020'
 
 SIZE = 425
 
