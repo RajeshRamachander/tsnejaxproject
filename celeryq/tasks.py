@@ -1,6 +1,5 @@
-from celery import shared_task
 import numpy as np
-from api.tsnejax import compute_low_dimensional_embedding  # Import only the needed function
+from tsnejax import compute_low_dimensional_embedding
 
 from celery import Celery
 
