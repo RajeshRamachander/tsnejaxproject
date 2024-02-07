@@ -1,71 +1,59 @@
 #!/bin/bash
 
-IMAGE_NAME="tsne-image"
-CONTAINER_NAME="tsne-container"
+# Function to display the menu and handle user input
+function display_menu() {
+    clear
+    echo "Docker Management Script"
+    echo "-----------------------"
+    echo "1. Build Docker Images"
+    echo "2. Start Docker Containers"
+    echo "3. Stop and Remove Docker Containers"
+    echo "4. Remove All Docker Images"
+    echo "5. Quit"
+    echo ""
+    read -p "Enter your choice (1-5): " choice
 
-function build_image() {
-    echo "Building Docker image..."
-    docker build --no-cache -t $IMAGE_NAME .
-    if [ $? -eq 0 ]; then
-        echo "Build successful."
+    # Validate user input
+    if [[ ! $choice =~ ^[1-5]$ ]]; then
+        echo "Invalid choice. Please enter a number between 1 and 5."
+        display_menu # Recursively call for another input
     else
-        echo "Build failed."
-        exit 1
+        process_choice $choice
     fi
 }
 
-function run_container() {
-    echo "Running Docker container..."
-    docker run -d -p 3000:3000 --name $CONTAINER_NAME $IMAGE_NAME
-    if [ $? -eq 0 ]; then
-        echo "Container started successfully."
-    else
-        echo "Failed to start the container."
-        exit 1
-    fi
-}
-
-function stop_container() {
-    echo "Stopping Docker container..."
-    docker stop $CONTAINER_NAME
-    docker rm $CONTAINER_NAME
-    if [ $? -eq 0 ]; then
-        echo "Container stopped and removed successfully."
-    else
-        echo "Failed to stop or remove the container."
-    fi
-}
-
-function remove_image() {
-    echo "Removing Docker image..."
-    docker rmi $IMAGE_NAME
-    if [ $? -eq 0 ]; then
-        echo "Image removed successfully."
-    else
-        echo "Failed to remove the image."
-    fi
-}
-
-PS3='Please enter your choice: '
-options=("Build Image" "Run Container" "Stop and Remove Container" "Remove Image" "Quit")
-select opt in "${options[@]}"
-do
-    case $opt in
-        "Build Image")
-            build_image
+# Function to handle selected choice
+function process_choice() {
+    case $1 in
+        1)
+            echo "Building Docker Images..."
+            docker-compose build --no-cache
             ;;
-        "Run Container")
-            run_container
+        2)
+            echo "Starting Docker Containers..."
+            docker-compose up -d
             ;;
-        "Stop and Remove Container")
-            stop_container
+        3)
+            echo "Stopping and Removing Docker Containers..."
+            docker-compose down -v
             ;;
-        "Remove Image")
-            remove_image
+        4)
+            echo "Removing All Docker Images..."
+            docker rmi $(docker images -q) # Remove all images, not just one named image_name
             ;;
-        "Quit")
-            break
+        5)
+            echo "Exiting script."
+            exit 0
             ;;
-        *) echo "Invalid option $REPLY";;
     esac
-done
+
+    # Ask if the user wants to continue after each action
+    read -p "Do you want to continue? (y/n): " continue_choice
+    if [[ $continue_choice =~ ^[Yy]$ ]]; then
+        display_menu
+    fi
+}
+
+# Start the script by displaying the menu
+display_menu
+

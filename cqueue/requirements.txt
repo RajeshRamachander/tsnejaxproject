@@ -6,3 +6,4 @@ numpy==1.26.3
 tqdm==4.66.1
 flask==3.0.1
 redis==5.0.1
+flower==2.0.1

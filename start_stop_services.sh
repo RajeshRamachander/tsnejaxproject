@@ -14,7 +14,7 @@ if [ "$1" == "start" ]; then
 
     # Start Celery Worker (Replace 'your_app' with your actual app name) in detached mode
     echo "Starting Celery Worker..."
-    celery -A app.server.celery worker --loglevel=info --detach &
+    celery -A cqueue.tasks.celery worker --loglevel=info --detach &
 
     # End of script
     echo "All services started successfully."
