@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import logging
 
-from celery_config import celery  # Import the Celery app instance
+from api.celery_config import celery  # Import the Celery app instance
 app = Flask(__name__)
 
 

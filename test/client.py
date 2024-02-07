@@ -9,6 +9,8 @@ import requests
 
 BASE_URL = 'http://localhost:7020'
 
+SIZE = 425
+
 class ServerCommunicator:
 
     def start_task(self, data):
@@ -68,7 +70,7 @@ class SimpleDataProcessor(DataProcessor):
     def prepare_data(self):
         # Implement specific data processing logic
         digits, digit_class = load_digits(return_X_y=True)
-        rand_idx = np.random.choice(np.arange(digits.shape[0]), size=500, replace=False)
+        rand_idx = np.random.choice(np.arange(digits.shape[0]), size=SIZE, replace=False)
         data = digits[rand_idx, :]
         self.classes = digit_class[rand_idx]
 

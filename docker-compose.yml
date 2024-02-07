@@ -1,32 +1,44 @@
+version: "3.8"
 services:
   web:
-    container_name: web
-    build: ./api
-    ports:
-      - "7020:7020"
-    links:
-      - redis
-    depends_on:
-      - redis
-    environment:
-      - FLASK_ENV=development
-    volumes:
-      - ./api:/app
-
-  redis:
-    container_name: redis
-    image: redis:5.0.5
-    hostname: redis
-
-  worker:
     build:
       context: ./api
-    hostname: worker
-    entrypoint: [ "celery" ]
-    command: [ "-A", "server.celery", "worker", "--loglevel=info" ]
-    volumes:
-      - ./api:/app
-    links:
-      - redis
+      dockerfile: Dockerfile
+    environment:
+      FLASK_DEBUG: "on"
+      FLASK_APP: ./server.py
+    restart: always
+    ports:
+     - "7020:7020"
     depends_on:
       - redis
+    volumes: ['./api:/api']
+  worker:
+    build:
+      context: ./cqueue
+      dockerfile: Dockerfile
+    command: celery -A tasks worker -l info -E
+    environment:
+      CELERY_BROKER_URL: redis://redis
+      CELERY_RESULT_BACKEND: redis://redis
+    depends_on:
+      - redis
+    volumes: ['./cqueue:/queue']
+  monitor:
+    build:
+      context: ./cqueue
+      dockerfile: Dockerfile
+    ports:
+     - "5555:5555"
+    command:  ['celery', 'flower', '-A', 'tasks']
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - worker
+    volumes: ['./cqueue:/queue']
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
