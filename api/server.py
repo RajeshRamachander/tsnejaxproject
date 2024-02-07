@@ -1,56 +1,9 @@
 from flask import Flask, request, jsonify
-from celery import Celery
 import logging
-from abc import ABC, abstractmethod
-import tsnejax as tj
-import numpy as np
 
-
-class DataProcessorStrategy(ABC):
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def process_data(self, data):
-        pass
-
-class WorkerDataProcessor(DataProcessorStrategy):
-
-    def process_data(self, data_args):
-        data_array = np.array(data_args['data'])
-        num_dimensions = data_args['num_dimensions']
-        perplexity = data_args['perplexity']
-        num_iterations = data_args['num_iterations']
-        learning_rate = data_args['learning_rate']
-        pbar = data_args['pbar']
-        use_ntk = data_args['use_ntk']
-
-        low_dim = tj.compute_low_dimensional_embedding(
-            data_array, num_dimensions, perplexity, num_iterations,
-            learning_rate, pbar=pbar, use_ntk=use_ntk
-        )
-
-        # Convert to list for serialization
-        low_dim_list = low_dim.tolist()
-
-        return low_dim_list  # Return the serializable list
-
-
-class CeleryTask:
-    def __init__(self, strategy):
-        self.strategy = strategy
-
-    def process_data(self, data):
-        return self.strategy.process_data(data)
-
+from celery_config import celery  # Import the Celery app instance
 app = Flask(__name__)
 
-
-celery = Celery(
-    app.name,  # Use app.name for consistency
-    broker="redis://127.0.0.1:6379/0",
-    backend="redis://127.0.0.1:6379/0"
-)
 
 def configure_logger(logger_name, log_file):
     """Configures a logger with a FileHandler and formatter."""
@@ -74,14 +27,6 @@ task_logger = configure_logger("celery_tasks", "celery_tasks.log")
 app_logger = configure_logger("flask_app", "flask_app.log")
 
 
-@celery.task(name='app.server.process_data',bind=True)
-def process_data(self, data):
-
-
-    task_logger.info('Calling app.process_data')
-
-    return CeleryTask(WorkerDataProcessor()).process_data(data)
-
 
 
 @app.route('/')
@@ -104,12 +49,12 @@ def start_task():
     app_logger.info(f"Low_dim data (partial view): {data[:10]}")
 
 
-    task = process_data.delay(json_data)
+    task = celery.send_task('tasks.tsne', args=[json_data])  # Use `app.send_task`
     return jsonify({'task_id': task.id}), 202
 
 @app.route('/task-status/<task_id>', methods=['GET'])
 def task_status(task_id):
-    result = process_data.AsyncResult(task_id)
+    result = celery.AsyncResult(task_id)
     if result.state == 'SUCCESS':
         return jsonify({'status': 'success', 'result': result.get()})
     elif result.status == 'FAILURE':
@@ -122,4 +67,3 @@ def task_status(task_id):
 if __name__ == '__main__':
     print("Flask app is starting...")
     app.run(debug=True, port=7020)
-
