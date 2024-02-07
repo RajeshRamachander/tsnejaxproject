@@ -26,8 +26,6 @@ def configure_logger(logger_name, log_file):
 
     return logger
 
-# Configure Celery's task logger
-task_logger = configure_logger("celery_tasks", "celery_tasks.log")
 
 # Configure Flask's app logger
 app_logger = configure_logger("flask_app", "flask_app.log")
