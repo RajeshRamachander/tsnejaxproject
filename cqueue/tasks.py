@@ -2,6 +2,25 @@ import numpy as np
 from tsnejax import compute_low_dimensional_embedding
 
 from celery import Celery
+import logging
+
+def configure_logger(logger_name, log_file):
+    """Configures a logger with a FileHandler and formatter."""
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]")
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+
+    return logger
+
+# Configure Flask's app logger
+task_logger = configure_logger("task", "task.log")
 
 celery = Celery(
     'tasks',  # Use the app name from your Flask app
@@ -33,5 +52,7 @@ def tsne(data_args):
 
     # Convert to list for serialization
     low_dim_list = low_dim.tolist()
+
+    task_logger.info("t-SNE task completed.")
 
     return low_dim_list
