@@ -9,7 +9,7 @@ import requests
 
 BASE_URL = 'http://127.0.0.1:7020'
 
-SIZE = 425
+SIZE = 500
 
 class ServerCommunicator:
 
