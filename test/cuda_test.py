@@ -34,22 +34,24 @@ def run_on_gpu():
     return result, end_time - start_time
 
 if __name__ == "__main__":
-    cpu_result, cpu_time = run_on_cpu()
-    gpu_result, gpu_time = run_on_gpu()
+    from jax import devices
 
-    print("CPU result:", cpu_result)
-    print("GPU result:", gpu_result)
-    print("CPU execution time:", cpu_time)
-    print("GPU execution time:", gpu_time)
 
-from jax import devices
+    def detect_jax_device():
+        all_devices = devices()
+        if any('gpu' in dev.platform.lower() for dev in all_devices):
+            gpu_result, gpu_time = run_on_gpu()
+            print("GPU result:", gpu_result)
+            print("GPU execution time:", gpu_time)
+            return 'GPU'
+        else:
+            cpu_result, cpu_time = run_on_cpu()
+            print("CPU result:", cpu_result)
+            print("CPU execution time:", cpu_time)
+            return 'CPU'
 
-def detect_jax_device():
-    all_devices = devices()
-    if any('gpu' in dev.platform.lower() for dev in all_devices):
-        return 'GPU'
-    else:
-        return 'CPU'
 
-device_type = detect_jax_device()
-print("JAX is running on:", device_type)
+    device_type = detect_jax_device()
+    print("JAX is running on:", device_type)
+
+
