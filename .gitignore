@@ -25,3 +25,5 @@ __pycache__/tsnenumpy.cpython-39.pyc
 .dvcignore
 *.db
 .dvcignore
+__pycache__/project_logger.cpython-311.pyc
+cqueue/__pycache__/__init__.cpython-311.pyc
