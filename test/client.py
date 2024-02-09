@@ -116,6 +116,8 @@ if __name__ == '__main__':
 
     main_data = data_processor.prepare_data()
 
+    start_time = time.time()  # Record start time
+
     response = server_communicator.start_task(main_data)
 
     if response.status_code == 202:
@@ -128,3 +130,8 @@ if __name__ == '__main__':
         data_processor.output_data_processor(processed_result)
     else:
         print(f'Error starting the task: {response.status_code}')
+
+    end_time = time.time()  # Record end time
+    execution_time = end_time - start_time
+    print(f"Total execution time: {execution_time} seconds")
+
