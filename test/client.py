@@ -116,22 +116,24 @@ if __name__ == '__main__':
 
     main_data = data_processor.prepare_data()
 
-    start_time = time.time()  # Record start time
-
     response = server_communicator.start_task(main_data)
 
     if response.status_code == 202:
         task_id = response.json()['task_id']
         print(f'Task started with ID: {task_id}')
 
+        start_time = time.time()  # Record start time
+
         processed_result = data_processor.wait_for_completion(task_id, server_communicator)
         # print(processed_result)
+
+        end_time = time.time()  # Record end time
+        execution_time = end_time - start_time
+        print(f"Total execution time: {execution_time} seconds")
 
         data_processor.output_data_processor(processed_result)
     else:
         print(f'Error starting the task: {response.status_code}')
 
-    end_time = time.time()  # Record end time
-    execution_time = end_time - start_time
-    print(f"Total execution time: {execution_time} seconds")
+
 
