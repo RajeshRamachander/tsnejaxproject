@@ -5,6 +5,7 @@ from jax import jit
 from tqdm import tqdm
 from neural_tangents import stax
 from jax.experimental import host_callback
+from jax import devices
 
 
 EPSILON = 1e-12
@@ -276,6 +277,13 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       learning_rate=100, scaling_factor=4.,
                                       pbar=False, random_state=42,
                                       perp_tol=1e-8, use_ntk = True):
+
+    all_devices = devices()
+    if any('gpu' in dev.platform.lower() for dev in all_devices):
+        jax.config.update('jax_platform_name', 'gpu')
+        print('Using GPU')
+        high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
+        print('Data is on GPU')
 
     # Ensure the random key is generated correctly
     if random_state is None:

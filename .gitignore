@@ -44,3 +44,7 @@ api/flask_app.log
 >>>>>>> bf6d6570627aa38dd044a23df3dade277317556b
 api/flask_app.log
 *.log
+api/flask_app.log
+cqueue/task.log
+cqueue/__pycache__/tasks.cpython-311.pyc
+cqueue/__pycache__/tsnejax.cpython-311.pyc
