@@ -25,3 +25,5 @@ __pycache__/tsnenumpy.cpython-39.pyc
 .dvcignore
 *.db
 .dvcignore
+api/flask_app.log
+cqueue/task.log
