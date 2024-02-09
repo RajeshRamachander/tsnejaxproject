@@ -42,3 +42,5 @@ api/flask_app.log
 =======
 >>>>>>> 0809f1918a09da07516aebf6d07085e75da47150
 >>>>>>> bf6d6570627aa38dd044a23df3dade277317556b
+api/flask_app.log
+*.log
