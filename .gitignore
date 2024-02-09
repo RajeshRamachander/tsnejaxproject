@@ -32,3 +32,5 @@ api/flask_app.log
 *.pyc
 *.pyc
 *.log
+*.log
+*.pyc
