@@ -25,5 +25,10 @@ __pycache__/tsnenumpy.cpython-39.pyc
 .dvcignore
 *.db
 .dvcignore
+<<<<<<< HEAD
 api/flask_app.log
 cqueue/task.log
+=======
+__pycache__/project_logger.cpython-311.pyc
+cqueue/__pycache__/__init__.cpython-311.pyc
+>>>>>>> 0809f1918a09da07516aebf6d07085e75da47150
