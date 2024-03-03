@@ -7,6 +7,8 @@ import numpy as np
 import ast
 import requests
 # from tensorflow.keras.datasets import cifar10  # Import CIFAR-10 dataset from Keras
+from tensorflow.keras.datasets import mnist
+
 
 
 BASE_URL = 'http://127.0.0.1:7020'
@@ -87,7 +89,7 @@ class SimpleDataProcessor(DataProcessor):
             'use_ntk': False
         }
 
-        return transmit_data
+        return transmit_data  
 
     def output_data_processor(self, processed_result):
 
