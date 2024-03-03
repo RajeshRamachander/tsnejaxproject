@@ -60,10 +60,27 @@ class DataProcessor(ABC):
                 print(f'Unknown status: {status}')
                 break
 
-    @abstractmethod
     def output_data_processor(self, processed_result):
+    
+        if processed_result is not None:
 
-        pass
+            # Remove the non-literal part of the string
+            result_received = processed_result.replace("Result received: ", "")
+
+            # Now convert the string back to a Python object (list of lists)
+            low_dim = ast.literal_eval(result_received)
+
+            low_dim = np.array(low_dim)
+
+
+            rcParams["font.size"] = 18
+            rcParams["figure.figsize"] = (12, 8)
+
+            print(low_dim)
+
+            scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
+            plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+            plt.show()
 
 
 
@@ -91,27 +108,7 @@ class SimpleDataProcessor(DataProcessor):
 
         return transmit_data  
 
-    def output_data_processor(self, processed_result):
-
-        if processed_result is not None:
-
-            # Remove the non-literal part of the string
-            result_received = processed_result.replace("Result received: ", "")
-
-            # Now convert the string back to a Python object (list of lists)
-            low_dim = ast.literal_eval(result_received)
-
-            low_dim = np.array(low_dim)
-
-
-            rcParams["font.size"] = 18
-            rcParams["figure.figsize"] = (12, 8)
-
-            print(low_dim)
-
-            scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
-            plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
-            plt.show()
+    
 
 # class CIFAR10DataProcessor(DataProcessor):
 #
