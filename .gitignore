@@ -47,14 +47,8 @@ api/flask_app.log
 api/flask_app.log
 cqueue/task.log
 cqueue/__pycache__/tasks.cpython-311.pyc
-cqueue/__pycache__/tsnejax.cpython-311.pyc
 app:
 results:
 transport:
-cqueue/task.log
-cqueue/task.log
-cqueue/task.log
-cqueue/task.log
-cqueue/__pycache__/tsnejax.cpython-311.pyc
 cqueue/__pycache__/tsnejax.cpython-311.pyc
 cqueue/task.log
