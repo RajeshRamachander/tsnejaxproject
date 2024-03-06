@@ -112,103 +112,48 @@ def compute_probabilities_from_ntk(data):
 
     return P
 
-@jit
-def compute_pairwise_probabilities(dist_mat, sigmas):
-    """
-    Computes a pairwise probability matrix based on the distance matrix and sigma values.
-
-    Parameters:
-    dist_mat (jax.numpy.DeviceArray): A JAX array representing the distance matrix.
-    sigmas (jax.numpy.DeviceArray): A JAX array of sigma values for scaling.
-    epsilon (float): A small value to avoid division by zero.
-
-    Returns:
-    jax.numpy.DeviceArray: The computed probability matrix.
-    """
-
-    # Compute numerators
-    inner = (-dist_mat) / (2 * (sigmas ** 2))
-    numers = jnp.exp(inner)
-
-    # Compute denominators
-    denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
-    denoms = denoms[:, None] + EPSILON  # Reshape and avoid division by zero
-
-    # Calculate probabilities
-    P = numers / denoms
-
-    # Set the diagonal to zero
-    P = P.at[jnp.diag_indices_from(P)].set(0)
-    return P
 
 @jit
-def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
-    """Calculates the pairwise affinities p_{j|i} using the given values of sigma
+def pairwise_affinities(data):
 
-    Parameters:
-    data : jnp.ndarray of shape (n_samples, n_features)
-    sigmas : column array of shape (n_samples, 1)
-    dist_mat : data distance matrix; jnp.ndarray of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Pairwise affinity matrix of size (n_samples, n_samples)
-
-    """
-    assert sigmas.shape == (data.shape[0], 1)
-    assert data.shape[0] == sigmas.shape[0] == dist_mat.shape[0], "Inconsistent dimensions"
-    assert sigmas.shape[1] == 1, "Sigmas must be a column array"
-
-    def true_fun(_):
-        # host_callback.id_print(use_ntk, what="use_ntk")
-        return compute_probabilities_from_ntk(data)
-
-    def false_fun(_):
-        # host_callback.id_print(use_ntk, what="use_ntk")
-        return compute_pairwise_probabilities(dist_mat, sigmas)
-
-    return jax.lax.cond(use_ntk, true_fun, false_fun, None)
+    return compute_probabilities_from_ntk(data)
 
 @jit
 def all_sym_affinities(data, perp, tol,  use_ntk, attempts=100):
-    dist_mat = compute_pairwise_distances(data)
-    sigma_maxs = jnp.full(data.shape[0], 1e12)
-    sigma_mins = jnp.full(data.shape[0], 1e-12)
+
     current_perps = jnp.full(data.shape[0], jnp.inf)
-    sigmas = (sigma_mins + sigma_maxs) / 2
-    P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat, use_ntk)
+    P = pairwise_affinities(data)
 
     def outer_while_condition(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk = args
+        current_perps, perp, tol, attempts, P, use_ntk = args
         return jnp.logical_and(
             jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
             attempts > 0
         )
 
     def outer_while_body(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk = args
-        sigmas = (sigma_mins + sigma_maxs) / 2
-        P = pairwise_affinities(data, sigmas.reshape(-1,1), dist_mat, use_ntk)
+        current_perps, perp, tol, attempts, P, use_ntk = args
+        P = pairwise_affinities(data)
         current_perps = calculate_row_wise_perplexities(P)
         attempts -= 1
 
         def inner_while_condition(args):
-            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            i, current_perps, perp = args
             return i < len(current_perps)
 
         def inner_while_body(args):
-            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            i, current_perps, perp = args
             current_perp = current_perps[i]
-            sigma_maxs = sigma_maxs.at[i].set(jax.numpy.where(current_perp > perp, sigmas[i], sigma_maxs[i]))
-            sigma_mins = sigma_mins.at[i].set(jax.numpy.where(current_perp <= perp, sigmas[i], sigma_mins[i]))
-            return i + 1, sigmas, sigma_maxs, sigma_mins, current_perps, perp
 
-        inner_while_args = (0, sigmas, sigma_maxs, sigma_mins, current_perps, perp)
-        (_, _, sigma_maxs, sigma_mins, _, _ ) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
+            return i + 1,  current_perps, perp
 
-        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk
+        inner_while_args = (0, current_perps, perp)
+        (_, _, _) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
 
-    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk)
-    (_, _, _, _, _, _, P, use_ntk) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+        return current_perps, perp, tol, attempts, P, use_ntk
+
+    outer_while_args = (current_perps, perp, tol, attempts,  P, use_ntk)
+    (_, _, _, _, P, use_ntk) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
 
     P = (P + P.T) / (2 * data.shape[0])
 
