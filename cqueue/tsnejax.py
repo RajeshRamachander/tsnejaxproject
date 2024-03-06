@@ -78,25 +78,25 @@ def compute_probabilities_from_ntk(data):
     # Define a function to compute the NTK matrix
     def compute_ntk_matrix(inputs):
 
-        # Reshape the data for the convolutional network
+        # # Reshape the data for the convolutional network
         X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
         X = X / 16.0  # Normalize pixel values
 
         # Define your neural network architecture
-        init_fn, apply_fn, kernel_fn = stax.serial(
-            stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
-            stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
-            stax.Flatten(),
-            stax.Dense(100), stax.Relu(),
-            stax.Dense(10)
-        )
-
-        # # Define your neural network architecture
         # init_fn, apply_fn, kernel_fn = stax.serial(
-        #     stax.Dense(2048), stax.Relu(),
-        #     stax.Dense(2048), stax.Relu(),
-        #     stax.Flatten(), stax.Dense(1)
+        #     stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
+        #     stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
+        #     stax.Flatten(),
+        #     stax.Dense(100), stax.Relu(),
+        #     stax.Dense(10)
         # )
+
+        # Define your neural network architecture
+        init_fn, apply_fn, kernel_fn = stax.serial(
+            stax.Dense(2048), stax.Relu(),
+            stax.Dense(2048), stax.Relu(),
+            stax.Flatten(), stax.Dense(1)
+        )
 
         # Compute the neural tangent kernel
         return kernel_fn(X, X, 'ntk')
@@ -104,19 +104,12 @@ def compute_probabilities_from_ntk(data):
 
     # Compute the NTK matrix
     ntk_matrix = compute_ntk_matrix(data)
+    # Apply softmax for normalization
+    P = jnp.exp(ntk_matrix) / jnp.sum(jnp.exp(ntk_matrix), axis=1, keepdims=True)
 
-    # Compute numerators
-    numers = ntk_matrix
-
-    # Compute denominators
-    denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
-    denoms = denoms[:, None] + EPSILON  # Reshape and avoid division by zero
-
-    # Calculate probabilities
-    P = numers / denoms
-
-    # Set the diagonal to zero
+    # Set the diagonal to zero (optional)
     P = P.at[jnp.diag_indices_from(P)].set(0)
+
     return P
 
 @jit
@@ -166,11 +159,11 @@ def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
     assert sigmas.shape[1] == 1, "Sigmas must be a column array"
 
     def true_fun(_):
-        host_callback.id_print(use_ntk, what="use_ntk")
+        # host_callback.id_print(use_ntk, what="use_ntk")
         return compute_probabilities_from_ntk(data)
 
     def false_fun(_):
-        host_callback.id_print(use_ntk, what="use_ntk")
+        # host_callback.id_print(use_ntk, what="use_ntk")
         return compute_pairwise_probabilities(dist_mat, sigmas)
 
     return jax.lax.cond(use_ntk, true_fun, false_fun, None)
@@ -291,7 +284,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     else:
         rand = random_state
 
-    P = all_sym_affinities(high_dimensional_data, target_perplexity, perp_tol, use_ntk) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol, use_ntk) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
