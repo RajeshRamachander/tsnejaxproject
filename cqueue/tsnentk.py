@@ -6,6 +6,8 @@ from tqdm import tqdm
 from neural_tangents import stax
 from jax.experimental import host_callback
 from jax import devices
+from jax.nn import softmax
+
 
 
 EPSILON = 1e-12
@@ -105,8 +107,7 @@ def compute_probabilities_from_ntk(data):
     # Compute the NTK matrix
     ntk_matrix = compute_ntk_matrix(data)
     # Apply softmax for normalization
-    P = jnp.exp(ntk_matrix) / jnp.sum(jnp.exp(ntk_matrix), axis=1, keepdims=True)
-
+    P = softmax(ntk_matrix, axis=1)
     # Set the diagonal to zero (optional)
     P = P.at[jnp.diag_indices_from(P)].set(0)
 
