@@ -199,11 +199,11 @@ def momentum_func(t):
     return jnp.where(t < 250, 0.5, 0.8)
 
 
-def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
+def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
                                       target_perplexity, max_iterations=100,
                                       learning_rate=100, scaling_factor=4.,
                                       pbar=False, random_state=42,
-                                      perp_tol=1e-12, use_ntk = True):
+                                      perp_tol=1e-12):
 
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):

@@ -1,5 +1,5 @@
 import numpy as np
-from tsnejax import compute_low_dimensional_embedding
+from tsnentk import compute_low_dimensional_embedding_ntk
 
 from celery import Celery
 import logging
@@ -40,14 +40,13 @@ def tsne(data_args):
     pbar = data_args['pbar']
     use_ntk = data_args['use_ntk']
 
-    low_dim = compute_low_dimensional_embedding(
+    low_dim = compute_low_dimensional_embedding_ntk(
         data_array,
         num_dimensions=num_dimensions,
         target_perplexity=perplexity,
         max_iterations=num_iterations,
         learning_rate=learning_rate,
         pbar=pbar,
-        use_ntk=use_ntk
     )
 
     # Convert to list for serialization
