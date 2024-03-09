@@ -59,7 +59,6 @@ def calculate_row_wise_perplexities(asym_affinities):
 def fill_diagonal(arr, value):
     return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
 
-
 @jit
 def compute_probabilities_from_ntk(data):
     """
@@ -79,8 +78,8 @@ def compute_probabilities_from_ntk(data):
     def compute_ntk_matrix(inputs):
 
         # # Reshape the data for the convolutional network
-        X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
-        X = X / 16.0  # Normalize pixel values
+        # X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
+        # X = X / 16.0  # Normalize pixel values
 
         # Define your neural network architecture
         # init_fn, apply_fn, kernel_fn = stax.serial(
@@ -99,7 +98,7 @@ def compute_probabilities_from_ntk(data):
         )
 
         # Compute the neural tangent kernel
-        return kernel_fn(X, X, 'ntk')
+        return kernel_fn(inputs, inputs, 'ntk')
 
 
     # Compute the NTK matrix
@@ -147,7 +146,7 @@ def all_sym_affinities(data, perp, tol, attempts=100):
     return P
 
 @jit
-def low_dim_affinities(Y, Y_dist_mat):
+def low_dim_affinities(Y_dist_mat):
     """
     Computes the low-dimensional affinities matrix Q.
 
@@ -163,6 +162,32 @@ def low_dim_affinities(Y, Y_dist_mat):
     denom += EPSILON  # Avoid div/0
     Q = numers / denom
     Q = fill_diagonal(Q,0)
+    return Q
+
+@jit
+def low_dim_affinities3(Y_dist_mat):
+    """
+    Computes the low-dimensional affinities matrix Q.
+
+    Parameters:
+    Y : Low-dimensional representation of the data, ndarray of shape (n_samples, n_components)
+    Y_dist_mat : Y distance matrix; ndarray of shape (n_samples, n_samples)
+
+    Returns:
+    Q : Symmetric low-dimensional affinities matrix of shape (n_samples, n_samples)
+    """
+
+    Q = jnp.exp(Y_dist_mat) / jnp.sum(jnp.exp(Y_dist_mat), axis=1, keepdims=True)
+
+    # Set the diagonal to zero (optional)
+    Q = Q.at[jnp.diag_indices_from(Q)].set(0)
+
+    return Q
+
+@jit
+def low_dim_affinities2(Y):
+    """Computes the low-dimensional affinities matrix Q using NTK."""
+    Q = compute_probabilities_from_ntk(Y)  # Call the NTK function
     return Q
 
 @jit
@@ -183,6 +208,47 @@ def compute_grad(P, Q, Y, Y_dist_mat):
     pq_factor = (P - Q)[:, :, jnp.newaxis]
     dist_factor = ((1 + Y_dist_mat) ** (-1))[:, :, jnp.newaxis]
     return jnp.sum(4 * pq_factor * Ydiff * dist_factor, axis=1)
+
+
+@jit
+def compute_grad2(P, Q, Y):
+    """
+    Computes the gradient vector needed to update the Y values using NTK affinities,
+    with added stability checks.
+
+    Parameters:
+        P: Symmetric affinities matrix of shape (n_samples, n_samples)
+        Q: Symmetric low-dimensional affinities matrix (NTK-based) of shape (n_samples, n_samples)
+        Y: Low-dimensional representation of the data, ndarray of shape (n_samples, n_components)
+
+    Returns:
+        grad: The gradient vector, shape (n_samples, n_components)
+    """
+
+    # Calculate difference between points with added stability
+    Ydiff = Y[:, jnp.newaxis, :] - Y[jnp.newaxis, :, :]  # Shape: (n_samples, n_samples, n_components)
+
+    # Compute difference in affinities with stability in mind
+    pq_factor = P - Q  # Shape: (n_samples, n_samples)
+
+    # Expand pq_factor across the feature dimension for element-wise multiplication with Ydiff
+    pq_factor_expanded = pq_factor[:, :, None]  # Shape: (n_samples, n_samples, 1)
+
+    # Apply a small epsilon to avoid division by zero in subsequent operations (if any)
+    EPSILON = 1e-12
+    pq_factor_safe = pq_factor_expanded + EPSILON
+
+    # Ensure Ydiff does not contribute to instability
+    # This step is optional and based on the assumption that extreme values in Ydiff could cause issues
+    Ydiff_safe = jnp.where(jnp.abs(Ydiff) < EPSILON, 0, Ydiff)
+
+    # Correct approach to apply pq_factor to each feature dimension of Ydiff
+    # Using safe versions of pq_factor and Ydiff to ensure stability
+    grad = 4 * jnp.sum(pq_factor_safe * Ydiff_safe, axis=1)
+
+    return grad
+
+
 
 @jit
 def momentum_func(t):
@@ -210,11 +276,6 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
         print('Data is on GPU')
 
-    # Ensure the random key is generated correctly
-    if random_state is None:
-        rand = random.PRNGKey(42)
-    else:
-        rand = random_state
 
     P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
@@ -226,6 +287,8 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     rand = random.PRNGKey(random_state)
     Y = random.multivariate_normal(rand, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
 
+    print(f'Shape of P {P.shape}')
+
     Y_old = jnp.zeros_like(Y)
 
     iter_range = range(max_iterations)
@@ -233,9 +296,13 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         iter_range = tqdm(iter_range, "Iterations")
     for t in iter_range:
         Y_dist_mat = compute_pairwise_distances(Y)
-        Q = low_dim_affinities(Y, Y_dist_mat)
+        Q = low_dim_affinities(Y_dist_mat)
+        # Q = low_dim_affinities3(Y_dist_mat)
         Q = jnp.clip(Q, EPSILON, None)
+        print(f'Shape of Q {Q.shape}')
+        print(f'Shape of Y {Y.shape}')
         grad = compute_grad(P, Q, Y, Y_dist_mat)
+        # grad = compute_grad2(P, Q, Y)
         Y = Y - learning_rate * grad + momentum_func(t) * (Y - Y_old)
         Y_old = Y.copy()
         if t == 100:

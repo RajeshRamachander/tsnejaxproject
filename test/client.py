@@ -99,7 +99,7 @@ class SimpleDataProcessor(DataProcessor):
             'data': data.tolist(),
             'num_dimensions': 2,
             'perplexity': 30,
-            'num_iterations': 500,
+            'num_iterations': 1000,
             'learning_rate': 100,
             'batch_size': 100,
             'pbar': True,
