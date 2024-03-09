@@ -13,7 +13,7 @@ from tensorflow.keras.datasets import mnist
 
 BASE_URL = 'http://127.0.0.1:7020'
 
-SIZE = 500
+SIZE = 1000
 
 class ServerCommunicator:
 

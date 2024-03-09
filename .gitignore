@@ -1,54 +1,25 @@
-
-jax/
-.idea/vcs.xml
-.idea/vcs.xml
-*.xml
-.idea/vcs.xml
-.idea/vcs.xml
-.idea/shelf/Uncommitted_changes_before_Update_at_29_10_23,_7_50_pm_\[Changes\]/shelved.patch
-.idea/shelf/Uncommitted_changes_before_Update_at_29_10_23,_7_50_pm_\[Changes\]1/shelved.patch
-.DS_Store
+# IDE specific files
+.idea/
 *.iml
-.idea/shelf/Uncommitted_changes_before_Merge_at_02_11_23,_10_49_pm_\[Changes\]/shelved.patch
-__pycache__/tsnejax.cpython-311.pyc
-__pycache__/tsnejax.cpython-311.pyc
-.idea/shelf/Uncommitted_changes_before_Merge_at_06_11_23,_10_27_am_\[Changes\]/shelved.patch
-__pycache__/tsnenumpy.cpython-311.pyc
-.idea/shelf/Uncommitted_changes_before_Checkout_at_06_11_23,_10_08_pm_\[Changes\]/shelved.patch
+
+# System files
+.DS_Store
+
+# Python cache files
+__pycache__/
+
+# Patch files
 *.patch
-__pycache__/tsnejax.cpython-39.pyc
-__pycache__/tsnenumpy.cpython-39.pyc
-.dvcignore
-.dvc/config
-.dvcignore
-.dvc/config
-.dvcignore
+
+# Database files
 *.db
+
+# Log files
+*.log
+
+# DVC files
+.dvc/
 .dvcignore
-<<<<<<< HEAD
-api/flask_app.log
-cqueue/task.log
-=======
-__pycache__/project_logger.cpython-311.pyc
-cqueue/__pycache__/__init__.cpython-311.pyc
-<<<<<<< HEAD
-api/flask_app.log
-*.log
-*.pyc
-*.pyc
-*.log
-*.log
-*.pyc
-=======
->>>>>>> 0809f1918a09da07516aebf6d07085e75da47150
->>>>>>> bf6d6570627aa38dd044a23df3dade277317556b
-api/flask_app.log
-*.log
-api/flask_app.log
-cqueue/task.log
-cqueue/__pycache__/tasks.cpython-311.pyc
 app:
 results:
 transport:
-cqueue/__pycache__/tsnejax.cpython-311.pyc
-cqueue/task.log
