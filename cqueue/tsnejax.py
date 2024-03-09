@@ -119,41 +119,28 @@ def pairwise_affinities(data):
     return compute_probabilities_from_ntk(data)
 
 @jit
-def all_sym_affinities(data, perp, tol,  use_ntk, attempts=100):
+def all_sym_affinities(data, perp, tol, attempts=100):
 
     current_perps = jnp.full(data.shape[0], jnp.inf)
     P = pairwise_affinities(data)
 
     def outer_while_condition(args):
-        current_perps, perp, tol, attempts, P, use_ntk = args
+        current_perps, perp, tol, attempts, P = args
         return jnp.logical_and(
             jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
             attempts > 0
         )
 
     def outer_while_body(args):
-        current_perps, perp, tol, attempts, P, use_ntk = args
+        current_perps, perp, tol, attempts, P= args
         P = pairwise_affinities(data)
         current_perps = calculate_row_wise_perplexities(P)
         attempts -= 1
 
-        def inner_while_condition(args):
-            i, current_perps, perp = args
-            return i < len(current_perps)
+        return current_perps, perp, tol, attempts, P
 
-        def inner_while_body(args):
-            i, current_perps, perp = args
-            current_perp = current_perps[i]
-
-            return i + 1,  current_perps, perp
-
-        inner_while_args = (0, current_perps, perp)
-        (_, _, _) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
-
-        return current_perps, perp, tol, attempts, P, use_ntk
-
-    outer_while_args = (current_perps, perp, tol, attempts,  P, use_ntk)
-    (_, _, _, _, P, use_ntk) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+    outer_while_args = (current_perps, perp, tol, attempts,  P)
+    (_, _, _, _, P) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
 
     P = (P + P.T) / (2 * data.shape[0])
 
@@ -229,7 +216,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     else:
         rand = random_state
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol, use_ntk) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
