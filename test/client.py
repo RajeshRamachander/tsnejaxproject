@@ -101,9 +101,7 @@ class SimpleDataProcessor(DataProcessor):
             'perplexity': 30,
             'num_iterations': 1000,
             'learning_rate': 100,
-            'batch_size': 100,
-            'pbar': True,
-            'use_ntk': True
+            'use_ntk': False
         }
 
         return transmit_data  

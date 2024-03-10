@@ -148,7 +148,7 @@ def momentum_func(t):
 
 
 def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,max_iterations=100,
-                                          learning_rate=100, scaling_factor=4.,pbar=False, random_state=42,
+                                          learning_rate=100, scaling_factor=4.,random_state=42,
                                           ):
 
     all_devices = devices()
@@ -174,8 +174,7 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
     Y_old = jnp.zeros_like(Y)
 
     iter_range = range(max_iterations)
-    if pbar:
-        iter_range = tqdm(iter_range, "Iterations")
+    iter_range = tqdm(iter_range, "Iterations")
     for t in iter_range:
         Y_dist_mat = compute_pairwise_distances(Y)
         Q = low_dim_affinities(Y_dist_mat)

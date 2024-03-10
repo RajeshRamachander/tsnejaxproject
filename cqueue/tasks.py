@@ -1,5 +1,6 @@
 import numpy as np
 from tsnentk import compute_low_dimensional_embedding_ntk
+from tsneregular import compute_low_dimensional_embedding_regular_tsne
 
 from celery import Celery
 import logging
@@ -37,7 +38,7 @@ def tsne(data_args):
         num_dimensions = data_args['num_dimensions']
         num_iterations = data_args['num_iterations']
         learning_rate = data_args['learning_rate']
-        pbar = data_args['pbar']
+
 
 
 
@@ -46,7 +47,6 @@ def tsne(data_args):
             num_dimensions=num_dimensions,
             max_iterations=num_iterations,
             learning_rate=learning_rate,
-            pbar=pbar,
         )
 
         # Convert the NumPy array result to a list for JSON serialization
@@ -58,6 +58,26 @@ def tsne(data_args):
         # Return the low-dimensional embedding as a list
         return low_dim_embedding_list
     else:
+        data_array = np.array(data_args['data'])
+        num_dimensions = data_args['num_dimensions']
+        num_iterations = data_args['num_iterations']
+        learning_rate = data_args['learning_rate']
+        perplexity = data_args['perplexity']
+
+        low_dim_embedding = compute_low_dimensional_embedding_regular_tsne(
+            data_array,
+            num_dimensions=num_dimensions,
+            max_iterations=num_iterations,
+            learning_rate=learning_rate,
+            perplexity=perplexity,
+        )
+
+        # Convert the NumPy array result to a list for JSON serialization
+        low_dim_embedding_list = low_dim_embedding.tolist()
+
         # Handle cases where NTK is not used or provide alternative methods
-        task_logger.info("Non-NTK approach for t-SNE is not implemented.")
-        return []
+        task_logger.info("Regular approach for t-SNE was implemented.")
+
+        # Return the low-dimensional embedding as a list
+        return low_dim_embedding_list
+
