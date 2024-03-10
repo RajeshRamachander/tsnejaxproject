@@ -32,26 +32,32 @@ celery = Celery(
 def tsne(data_args):
     """Processes data using t-SNE and returns the low-dimensional embedding."""
 
-    data_array = np.array(data_args['data'])
-    num_dimensions = data_args['num_dimensions']
-    perplexity = data_args['perplexity']
-    num_iterations = data_args['num_iterations']
-    learning_rate = data_args['learning_rate']
-    pbar = data_args['pbar']
-    use_ntk = data_args['use_ntk']
+    if data_args['use_ntk']:
+        data_array = np.array(data_args['data'])
+        num_dimensions = data_args['num_dimensions']
+        num_iterations = data_args['num_iterations']
+        learning_rate = data_args['learning_rate']
+        pbar = data_args['pbar']
 
-    low_dim = compute_low_dimensional_embedding_ntk(
-        data_array,
-        num_dimensions=num_dimensions,
-        target_perplexity=perplexity,
-        max_iterations=num_iterations,
-        learning_rate=learning_rate,
-        pbar=pbar,
-    )
 
-    # Convert to list for serialization
-    low_dim_list = low_dim.tolist()
 
-    task_logger.info("t-SNE task completed.")
+        low_dim_embedding = compute_low_dimensional_embedding_ntk(
+            data_array,
+            num_dimensions=num_dimensions,
+            max_iterations=num_iterations,
+            learning_rate=learning_rate,
+            pbar=pbar,
+        )
 
-    return low_dim_list
+        # Convert the NumPy array result to a list for JSON serialization
+        low_dim_embedding_list = low_dim_embedding.tolist()
+
+        # Log the completion of the t-SNE task
+        task_logger.info("t-SNE task completed using NTK approach.")
+
+        # Return the low-dimensional embedding as a list
+        return low_dim_embedding_list
+    else:
+        # Handle cases where NTK is not used or provide alternative methods
+        task_logger.info("Non-NTK approach for t-SNE is not implemented.")
+        return []

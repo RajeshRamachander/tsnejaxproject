@@ -31,33 +31,6 @@ def compute_pairwise_distances(high_dimensional_data):
     return pairwise_distances
 
 @jit
-def calculate_row_wise_entropy(asym_affinities):
-    """
-    Row-wise Shannon entropy of pairwise affinity matrix P
-
-    Parameters:
-    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Row-wise Shannon entropy of shape (n_samples,)
-    """
-    asym_affinities = jnp.clip(asym_affinities, EPSILON, None)
-    return -jnp.sum(asym_affinities * jnp.log2(asym_affinities), axis=1)
-
-@jit
-def calculate_row_wise_perplexities(asym_affinities):
-    """
-    Compute perplexities of pairwise affinity matrix P
-
-    Parameters:
-    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Row-wise perplexities of shape (n_samples,)
-    """
-    return 2 ** calculate_row_wise_entropy(asym_affinities)
-
-@jit
 def fill_diagonal(arr, value):
     return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
 
@@ -117,35 +90,10 @@ def compute_probabilities_from_ntk(data):
 @jit
 def pairwise_affinities(data):
 
-    return compute_probabilities_from_ntk(data)
-
-@jit
-def all_sym_affinities(data, perp, tol, attempts=10000):
-
-    current_perps = jnp.full(data.shape[0], jnp.inf)
-    P = pairwise_affinities(data)
-
-    def outer_while_condition(args):
-        current_perps, perp, tol, attempts, P = args
-        return jnp.logical_and(
-            jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
-            attempts > 0
-        )
-
-    def outer_while_body(args):
-        current_perps, perp, tol, attempts, P= args
-        P = pairwise_affinities(data)
-        current_perps = calculate_row_wise_perplexities(P)
-        attempts -= 1
-
-        return current_perps, perp, tol, attempts, P
-
-    outer_while_args = (current_perps, perp, tol, attempts,  P)
-    (_, _, _, attempts, P) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
-    host_callback.id_print(attempts,what='number of attempts')
+    P = compute_probabilities_from_ntk(data)
     P = (P + P.T) / (2 * data.shape[0])
-
     return P
+
 
 @jit
 def low_dim_affinities(Y_dist_mat):
@@ -199,11 +147,9 @@ def momentum_func(t):
     return jnp.where(t < 250, 0.5, 0.8)
 
 
-def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
-                                      target_perplexity, max_iterations=100,
-                                      learning_rate=100, scaling_factor=4.,
-                                      pbar=False, random_state=42,
-                                      perp_tol=1e-12):
+def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,max_iterations=100,
+                                          learning_rate=100, scaling_factor=4.,pbar=False, random_state=42,
+                                          ):
 
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
@@ -213,7 +159,7 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
         print('Data is on GPU')
 
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol) * scaling_factor
+    P = pairwise_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0])) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
