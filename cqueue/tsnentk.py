@@ -52,17 +52,41 @@ def compute_probabilities_from_ntk(data):
     # Define a function to compute the NTK matrix
     def compute_ntk_matrix(inputs):
 
-        # # Reshape the data for the convolutional network
+        # Reshape the data for the convolutional network
         # X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
         # X = X / 16.0  # Normalize pixel values
 
-        # Define your neural network architecture
         # init_fn, apply_fn, kernel_fn = stax.serial(
         #     stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
+        #     stax.Conv(64, (3, 3), padding="SAME"), stax.Relu(),
+        #     stax.Conv(128, (3, 3), padding="SAME"), stax.Relu(),
         #     stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
         #     stax.Flatten(),
         #     stax.Dense(100), stax.Relu(),
         #     stax.Dense(10)
+        # )
+
+        # init_fn, apply_fn, kernel_fn = stax.serial(
+        #     # First Convolutional Block
+        #     stax.Conv(32, (3, 3), padding='SAME'),  # 32 filters, 3x3 kernel
+        #     stax.Relu(),
+        #
+        #     # Second Convolutional Block
+        #     stax.Conv(64, (3, 3), padding='SAME'),  # 64 filters, 3x3 kernel
+        #     stax.Relu(),
+        #
+        #     # Third Convolutional Block
+        #     stax.Conv(128, (3, 3), padding='SAME'),  # 128 filters, 3x3 kernel
+        #     stax.Relu(),
+        #     stax.AvgPool((2, 2), strides=(2, 2)),  # Average pooling with 2x2 kernel
+        #
+        #     # Fully Connected Layers
+        #     stax.Flatten(),  # Flatten the output of the last pooling layer
+        #     stax.Dense(256),  # Fully connected layer with 256 units
+        #     stax.Relu(),
+        #
+        #     # Output Layer
+        #     stax.Dense(10),  # Adjust the number of units to match the number of classes
         # )
 
         # Define your neural network architecture
@@ -81,6 +105,10 @@ def compute_probabilities_from_ntk(data):
     ntk_matrix = compute_ntk_matrix(data)
     # Apply softmax for normalization
     P = softmax(ntk_matrix, axis=1)
+
+    #exp(Xi) / sum over i (exp(Xi))
+
+    #exp(Xi/sigma i) / sum over i (exp (Xi/ sigma i))
     # Set the diagonal to zero (optional)
     P = P.at[jnp.diag_indices_from(P)].set(0)
 
