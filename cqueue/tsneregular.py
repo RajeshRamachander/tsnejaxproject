@@ -3,7 +3,6 @@ import jax
 import jax.numpy as jnp
 from jax import jit
 from tqdm import tqdm
-from neural_tangents import stax
 from jax.experimental import host_callback
 from jax import devices
 

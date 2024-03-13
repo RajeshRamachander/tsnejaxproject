@@ -32,52 +32,32 @@ celery = Celery(
 @celery.task(name='tasks.tsne')
 def tsne(data_args):
     """Processes data using t-SNE and returns the low-dimensional embedding."""
+    data_array = np.array(data_args['data'])
+    num_dimensions = data_args['num_dimensions']
+    num_iterations = data_args['num_iterations']
+    learning_rate = data_args['learning_rate']
+    perplexity = data_args['perplexity']
+    use_ntk = data_args['use_ntk']
 
-    if data_args['use_ntk']:
-        data_array = np.array(data_args['data'])
-        num_dimensions = data_args['num_dimensions']
-        num_iterations = data_args['num_iterations']
-        learning_rate = data_args['learning_rate']
+    # Determine the function to use based on `use_ntk`
+    compute_embedding = compute_low_dimensional_embedding_ntk if use_ntk else compute_low_dimensional_embedding_regular_tsne
 
+    # Compute the low-dimensional embedding
+    low_dim_embedding = compute_embedding(
+        data_array,
+        num_dimensions=num_dimensions,
+        max_iterations=num_iterations,
+        learning_rate=learning_rate,
+        perplexity=perplexity,
+    )
 
+    # Convert the NumPy array result to a list for JSON serialization
+    low_dim_embedding_list = low_dim_embedding.tolist()
 
+    # Log the completion of the t-SNE task
+    task_logger.info(f"t-SNE task completed using {'NTK approach' if use_ntk else 'regular approach'}.")
 
-        low_dim_embedding = compute_low_dimensional_embedding_ntk(
-            data_array,
-            num_dimensions=num_dimensions,
-            max_iterations=num_iterations,
-            learning_rate=learning_rate,
-        )
+    # Return the low-dimensional embedding as a list
+    return low_dim_embedding_list
 
-        # Convert the NumPy array result to a list for JSON serialization
-        low_dim_embedding_list = low_dim_embedding.tolist()
-
-        # Log the completion of the t-SNE task
-        task_logger.info("t-SNE task completed using NTK approach.")
-
-        # Return the low-dimensional embedding as a list
-        return low_dim_embedding_list
-    else:
-        data_array = np.array(data_args['data'])
-        num_dimensions = data_args['num_dimensions']
-        num_iterations = data_args['num_iterations']
-        learning_rate = data_args['learning_rate']
-        perplexity = data_args['perplexity']
-
-        low_dim_embedding = compute_low_dimensional_embedding_regular_tsne(
-            data_array,
-            num_dimensions=num_dimensions,
-            max_iterations=num_iterations,
-            learning_rate=learning_rate,
-            perplexity=perplexity,
-        )
-
-        # Convert the NumPy array result to a list for JSON serialization
-        low_dim_embedding_list = low_dim_embedding.tolist()
-
-        # Handle cases where NTK is not used or provide alternative methods
-        task_logger.info("Regular approach for t-SNE was implemented.")
-
-        # Return the low-dimensional embedding as a list
-        return low_dim_embedding_list
 

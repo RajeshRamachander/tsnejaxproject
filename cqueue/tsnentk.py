@@ -30,12 +30,97 @@ def compute_pairwise_distances(high_dimensional_data):
 
     return pairwise_distances
 
+
+@jit
+def calculate_row_wise_entropy(asym_affinities):
+    """
+    Row-wise Shannon entropy of pairwise affinity matrix P
+
+    Parameters:
+    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
+
+    Returns:
+    jnp.ndarray: Row-wise Shannon entropy of shape (n_samples,)
+    """
+    asym_affinities = jnp.clip(asym_affinities, EPSILON, None)
+    return -jnp.sum(asym_affinities * jnp.log2(asym_affinities), axis=1)
+
+@jit
+def calculate_row_wise_perplexities(asym_affinities):
+    """
+    Compute perplexities of pairwise affinity matrix P
+
+    Parameters:
+    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
+
+    Returns:
+    jnp.ndarray: Row-wise perplexities of shape (n_samples,)
+    """
+    return 2 ** calculate_row_wise_entropy(asym_affinities)
+
 @jit
 def fill_diagonal(arr, value):
     return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
 
 @jit
-def compute_probabilities_from_ntk(data):
+def compute_ntk_matrix(inputs):
+
+    # Reshape the data for the convolutional network
+    # X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
+    # X = X / 16.0  # Normalize pixel values
+    #
+    # # init_fn, apply_fn, kernel_fn = stax.serial(
+    # #     stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
+    # #     stax.Conv(64, (3, 3), padding="SAME"), stax.Relu(),
+    # #     stax.Conv(128, (3, 3), padding="SAME"), stax.Relu(),
+    # #     stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
+    # #     stax.Flatten(),
+    # #     stax.Dense(100), stax.Relu(),
+    # #     stax.Dense(10)
+    # # )
+    #
+    # init_fn, apply_fn, kernel_fn = stax.serial(
+    #     # First Convolutional Block
+    #     stax.Conv(32, (3, 3), padding='SAME'),  # 32 filters, 3x3 kernel
+    #     stax.Relu(),
+    #
+    #     # Second Convolutional Block
+    #     stax.Conv(64, (3, 3), padding='SAME'),  # 64 filters, 3x3 kernel
+    #     stax.Relu(),
+    #
+    #     # Third Convolutional Block
+    #     stax.Conv(128, (3, 3), padding='SAME'),  # 128 filters, 3x3 kernel
+    #     stax.Relu(),
+    #     stax.AvgPool((2, 2), strides=(2, 2)),  # Average pooling with 2x2 kernel
+    #
+    #     # Fully Connected Layers
+    #     stax.Flatten(),  # Flatten the output of the last pooling layer
+    #     stax.Dense(256),  # Fully connected layer with 256 units
+    #     stax.Relu(),
+    #
+    #     # Output Layer
+    #     stax.Dense(10),  # Adjust the number of units to match the number of classes
+    # )
+
+    X = inputs
+
+    # Define your neural network architecture
+    init_fn, apply_fn, kernel_fn = stax.serial(
+        stax.Dense(8192), stax.Relu(),
+        stax.Dense(4096), stax.Relu(),
+        stax.Dense(2048), stax.Relu(),
+        stax.Dense(1024), stax.Relu(),
+        stax.Dense(512), stax.Relu(),
+        stax.Dense(256), stax.Relu(),
+        stax.Dense(128), stax.Relu(),
+        stax.Flatten(), stax.Dense(10)
+    )
+
+    # Compute the neural tangent kernel
+    return kernel_fn(X, X, 'ntk')
+
+@jit
+def compute_probabilities_from_ntk(ntk_matrix, sigmas):
     """
     Computes a probability matrix from input data using a scaled Neural Tangent Kernel (NTK).
 
@@ -49,79 +134,72 @@ def compute_probabilities_from_ntk(data):
     jax.numpy.DeviceArray: The computed probability matrix.
     """
 
-    # Define a function to compute the NTK matrix
-    def compute_ntk_matrix(inputs):
+    # Ensure sigmas is a column vector for broadcasting
+    sigmas = sigmas.reshape(-1, 1)
 
-        # Reshape the data for the convolutional network
-        # X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
-        # X = X / 16.0  # Normalize pixel values
+    # Normalize the NTK matrix by the standard deviations
+    normalized_scores = ntk_matrix / sigmas
 
-        # init_fn, apply_fn, kernel_fn = stax.serial(
-        #     stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
-        #     stax.Conv(64, (3, 3), padding="SAME"), stax.Relu(),
-        #     stax.Conv(128, (3, 3), padding="SAME"), stax.Relu(),
-        #     stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
-        #     stax.Flatten(),
-        #     stax.Dense(100), stax.Relu(),
-        #     stax.Dense(10)
-        # )
+    # Apply softmax to the normalized scores
+    adjusted_probabilities = softmax(normalized_scores, axis=1)
 
-        # init_fn, apply_fn, kernel_fn = stax.serial(
-        #     # First Convolutional Block
-        #     stax.Conv(32, (3, 3), padding='SAME'),  # 32 filters, 3x3 kernel
-        #     stax.Relu(),
-        #
-        #     # Second Convolutional Block
-        #     stax.Conv(64, (3, 3), padding='SAME'),  # 64 filters, 3x3 kernel
-        #     stax.Relu(),
-        #
-        #     # Third Convolutional Block
-        #     stax.Conv(128, (3, 3), padding='SAME'),  # 128 filters, 3x3 kernel
-        #     stax.Relu(),
-        #     stax.AvgPool((2, 2), strides=(2, 2)),  # Average pooling with 2x2 kernel
-        #
-        #     # Fully Connected Layers
-        #     stax.Flatten(),  # Flatten the output of the last pooling layer
-        #     stax.Dense(256),  # Fully connected layer with 256 units
-        #     stax.Relu(),
-        #
-        #     # Output Layer
-        #     stax.Dense(10),  # Adjust the number of units to match the number of classes
-        # )
+    adjusted_probabilities = adjusted_probabilities.at[jnp.diag_indices_from(adjusted_probabilities)].set(0)
 
-        # Define your neural network architecture
-        init_fn, apply_fn, kernel_fn = stax.serial(
-            stax.Dense(8192), stax.Relu(),
-            stax.Dense(4098), stax.Relu(),
-            stax.Dense(2048), stax.Relu(),
-            stax.Flatten(), stax.Dense(1)
-        )
+    return adjusted_probabilities
 
-        # Compute the neural tangent kernel
-        return kernel_fn(inputs, inputs, 'ntk')
-
-
-    # Compute the NTK matrix
-    ntk_matrix = compute_ntk_matrix(data)
-    # Apply softmax for normalization
-    P = softmax(ntk_matrix, axis=1)
-
-    #exp(Xi) / sum over i (exp(Xi))
-
-    #exp(Xi/sigma i) / sum over i (exp (Xi/ sigma i))
-    # Set the diagonal to zero (optional)
-    P = P.at[jnp.diag_indices_from(P)].set(0)
-
-    return P
 
 
 @jit
-def pairwise_affinities(data):
+def pairwise_affinities(sigmas, dist_mat):
 
-    P = compute_probabilities_from_ntk(data)
+    return compute_probabilities_from_ntk(dist_mat, sigmas)
+
+
+@jit
+def all_sym_affinities(data, perp, tol,  attempts=100):
+    ntk_mat = compute_ntk_matrix(data)
+    sigma_maxs = jnp.full(data.shape[0], 1e12)
+    sigma_mins = jnp.full(data.shape[0], 1e-12)
+    current_perps = jnp.full(data.shape[0], jnp.inf)
+    sigmas = (sigma_mins + sigma_maxs) / 2
+    P = pairwise_affinities(sigmas.reshape(-1, 1), ntk_mat)
+
+    def outer_while_condition(args):
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P = args
+        return jnp.logical_and(
+            jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
+            attempts > 0
+        )
+
+    def outer_while_body(args):
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P= args
+        sigmas = (sigma_mins + sigma_maxs) / 2
+        P = pairwise_affinities(sigmas.reshape(-1,1), ntk_mat)
+        current_perps = calculate_row_wise_perplexities(P)
+        attempts -= 1
+
+        def inner_while_condition(args):
+            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            return i < len(current_perps)
+
+        def inner_while_body(args):
+            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
+            current_perp = current_perps[i]
+            sigma_maxs = sigma_maxs.at[i].set(jax.numpy.where(current_perp > perp, sigmas[i], sigma_maxs[i]))
+            sigma_mins = sigma_mins.at[i].set(jax.numpy.where(current_perp <= perp, sigmas[i], sigma_mins[i]))
+            return i + 1, sigmas, sigma_maxs, sigma_mins, current_perps, perp
+
+        inner_while_args = (0, sigmas, sigma_maxs, sigma_mins, current_perps, perp)
+        (_, _, sigma_maxs, sigma_mins, _, _ ) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
+
+        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P
+
+    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P)
+    (_, _, _, _, _, _, P) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+
     P = (P + P.T) / (2 * data.shape[0])
-    return P
 
+    return P
 
 @jit
 def low_dim_affinities(Y_dist_mat):
@@ -175,10 +253,11 @@ def momentum_func(t):
     return jnp.where(t < 250, 0.5, 0.8)
 
 
-def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,max_iterations=100,
-                                          learning_rate=100, scaling_factor=4.,random_state=42,
-                                          ):
-
+def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
+                                      perplexity, max_iterations=100,
+                                      learning_rate=100, scaling_factor=4.,
+                                      random_state=42,
+                                      perp_tol=1e-8):
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
         jax.config.update('jax_platform_name', 'gpu')
@@ -186,8 +265,8 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
         high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
         print('Data is on GPU')
 
-
-    P = pairwise_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0])) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity,
+                           perp_tol) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
@@ -197,11 +276,10 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
     rand = random.PRNGKey(random_state)
     Y = random.multivariate_normal(rand, mean=init_mean, cov=init_cov, shape=(high_dimensional_data.shape[0],))
 
-    print(f'Shape of P {P.shape}')
-
     Y_old = jnp.zeros_like(Y)
 
     iter_range = range(max_iterations)
+
     iter_range = tqdm(iter_range, "Iterations")
     for t in iter_range:
         Y_dist_mat = compute_pairwise_distances(Y)
