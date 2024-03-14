@@ -29,15 +29,11 @@ class ServerCommunicator:
 class DataProcessor(ABC):
 
     def __init__(self):
-        pass
+        self.algorithm = None  # Add an attribute to store the algorithm type
 
     @abstractmethod
     def prepare_data(self):
-        # Sample data to send in the POST request
-        data = {
-            'data': [i for i in range(1, 10)]  # Replace with your own data
-        }
-        return data
+        pass
 
 
     def process_result(self, result):
@@ -76,6 +72,8 @@ class DataProcessor(ABC):
             rcParams["font.size"] = 18
             rcParams["figure.figsize"] = (12, 8)
 
+            print(f"Using {self.algorithm} for t-SNE.")  # Print the algorithm type
+
             print(low_dim)
 
             scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
@@ -85,9 +83,11 @@ class DataProcessor(ABC):
 
 
 class SimpleDataProcessor(DataProcessor):
-
-    def __init__(self):
+    def __init__(self, algorithm):
+        super().__init__()  # Initialize the base class
         self.classes = None
+        self.algorithm = algorithm  # Set the algorithm attribute based on the constructor argument
+
     def prepare_data(self):
         # Implement specific data processing logic
         digits, digit_class = load_digits(return_X_y=True)
@@ -99,13 +99,13 @@ class SimpleDataProcessor(DataProcessor):
             'data': data.tolist(),  # Your high-dimensional data converted to a list
             'num_dimensions': 2,  # Target dimensionality for the embedding
             'perplexity': 30,  # Perplexity parameter for t-SNE
-            'num_iterations': 1000,  # Number of iterations for optimization
+            'num_iterations': 10000,  # Number of iterations for optimization
             'learning_rate': 100,  # Learning rate for the optimization
-            'algorithm': 'ntk',  # Specify the algorithm: 'ntk', 'jax_tsne', or 'sklearn_tsne'
+            'algorithm': self.algorithm,  # Use the algorithm attribute
         }
 
+        return transmit_data
 
-        return transmit_data  
 
     
 
@@ -156,31 +156,37 @@ class SimpleDataProcessor(DataProcessor):
 #             plt.ylabel("Dimension 2")
 #             plt.show()
 
-
 if __name__ == '__main__':
     server_communicator = ServerCommunicator()
-    data_processor = SimpleDataProcessor()
 
-    main_data = data_processor.prepare_data()
+    # List of algorithms to use
+    algorithms = ['ntk', 'jax_tsne', 'sklearn_tsne']
 
-    response = server_communicator.start_task(main_data)
+    for algorithm in algorithms[::-1]:
+        print(f"Starting t-SNE with {algorithm} algorithm.")
+        data_processor = SimpleDataProcessor(algorithm)  # Pass the algorithm to the constructor
 
-    if response.status_code == 202:
-        task_id = response.json()['task_id']
-        print(f'Task started with ID: {task_id}')
+        main_data = data_processor.prepare_data()
 
-        start_time = time.time()  # Record start time
+        response = server_communicator.start_task(main_data)
 
-        processed_result = data_processor.wait_for_completion(task_id, server_communicator)
-        # print(processed_result)
+        if response.status_code == 202:
+            task_id = response.json()['task_id']
+            print(f'Task started with ID: {task_id}')
 
-        end_time = time.time()  # Record end time
-        execution_time = end_time - start_time
-        print(f"Total execution time: {execution_time} seconds")
+            start_time = time.time()  # Record start time
 
-        data_processor.output_data_processor(processed_result)
-    else:
-        print(f'Error starting the task: {response.status_code}')
+            processed_result = data_processor.wait_for_completion(task_id, server_communicator)
+
+            end_time = time.time()  # Record end time
+            execution_time = end_time - start_time
+            print(f"Total execution time: {execution_time} seconds")
+
+            data_processor.output_data_processor(processed_result)
+        else:
+            print(f'Error starting the task: {response.status_code}')
+        print("\n")  # Print a newline for better separation between algorithm outputs
+
 
 
 
