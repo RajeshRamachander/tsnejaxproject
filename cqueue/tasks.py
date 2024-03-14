@@ -1,6 +1,8 @@
 import numpy as np
 from tsnentk import compute_low_dimensional_embedding_ntk
 from tsneregular import compute_low_dimensional_embedding_regular_tsne
+from sklearn.manifold import TSNE
+
 
 from celery import Celery
 import logging
@@ -30,32 +32,51 @@ celery = Celery(
 )
 
 @celery.task(name='tasks.tsne')
-def tsne(data_args):
+def tsne(transmit_data):
     """Processes data using t-SNE and returns the low-dimensional embedding."""
-    data_array = np.array(data_args['data'])
-    num_dimensions = data_args['num_dimensions']
-    num_iterations = data_args['num_iterations']
-    learning_rate = data_args['learning_rate']
-    perplexity = data_args['perplexity']
-    use_ntk = data_args['use_ntk']
+    data = np.array(transmit_data['data'])
+    num_dimensions = transmit_data['num_dimensions']
+    num_iterations = transmit_data['num_iterations']
+    learning_rate = transmit_data['learning_rate']
+    perplexity = transmit_data['perplexity']
+    algorithm = transmit_data.get('algorithm', 'sklearn_tsne')  # Default to sklearn_tsne if not specified
 
-    # Determine the function to use based on `use_ntk`
-    compute_embedding = compute_low_dimensional_embedding_ntk if use_ntk else compute_low_dimensional_embedding_regular_tsne
+    # Initialize low_dim_embedding to None
+    low_dim_embedding = None
 
-    # Compute the low-dimensional embedding
-    low_dim_embedding = compute_embedding(
-        data_array,
-        num_dimensions=num_dimensions,
-        max_iterations=num_iterations,
-        learning_rate=learning_rate,
-        perplexity=perplexity,
-    )
+    if algorithm == 'ntk':
+        low_dim_embedding = compute_low_dimensional_embedding_ntk(
+            data,
+            num_dimensions=num_dimensions,
+            max_iterations=num_iterations,
+            learning_rate=learning_rate,
+            perplexity=perplexity,
+        )
+    elif algorithm == 'jax_tsne':
+        low_dim_embedding = compute_low_dimensional_embedding_regular_tsne(
+            data,
+            num_dimensions=num_dimensions,
+            max_iterations=num_iterations,
+            learning_rate=learning_rate,
+            perplexity=perplexity,
+        )
+    elif algorithm == 'sklearn_tsne':
+        tsne_model = TSNE(
+            n_components=num_dimensions,
+            perplexity=perplexity,
+            n_iter=num_iterations,
+            learning_rate=learning_rate
+        )
+        low_dim_embedding = tsne_model.fit_transform(data)
+    else:
+        raise ValueError(f"Unsupported algorithm specified: {algorithm}")
 
     # Convert the NumPy array result to a list for JSON serialization
     low_dim_embedding_list = low_dim_embedding.tolist()
 
     # Log the completion of the t-SNE task
-    task_logger.info(f"t-SNE task completed using {'NTK approach' if use_ntk else 'regular approach'}.")
+    algorithm_name = 'NTK' if algorithm == 'ntk' else 'JAX' if algorithm == 'jax_tsne' else 'sklearn'
+    task_logger.info(f"t-SNE task completed using {algorithm_name} approach.")
 
     # Return the low-dimensional embedding as a list
     return low_dim_embedding_list

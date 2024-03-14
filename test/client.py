@@ -96,13 +96,14 @@ class SimpleDataProcessor(DataProcessor):
         self.classes = digit_class[rand_idx]
 
         transmit_data = {
-            'data': data.tolist(),
-            'num_dimensions': 2,
-            'perplexity': 30,
-            'num_iterations': 10000,
-            'learning_rate': 100,
-            'use_ntk': False
+            'data': data.tolist(),  # Your high-dimensional data converted to a list
+            'num_dimensions': 2,  # Target dimensionality for the embedding
+            'perplexity': 30,  # Perplexity parameter for t-SNE
+            'num_iterations': 1000,  # Number of iterations for optimization
+            'learning_rate': 100,  # Learning rate for the optimization
+            'algorithm': 'ntk',  # Specify the algorithm: 'ntk', 'jax_tsne', or 'sklearn_tsne'
         }
+
 
         return transmit_data  
 

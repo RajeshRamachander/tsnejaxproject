@@ -10,9 +10,9 @@ from jax import devices
 EPSILON = 1e-12
 
 @jit
-def compute_pairwise_distances(high_dimensional_data):
+def compute_pairwise_distances(dim_data):
     """
-    Compute pairwise distances between data points.
+    Compute pairwise distances between data points in an optimized manner.
 
     Args:
         high_dimensional_data (jnp.ndarray): High-dimensional input data.
@@ -20,12 +20,10 @@ def compute_pairwise_distances(high_dimensional_data):
     Returns:
         jnp.ndarray: Pairwise distances matrix.
     """
-    # Compute pairwise squared Euclidean distances using JAX
-    X_squared = jnp.square(high_dimensional_data)
-    sum_X = jnp.sum(X_squared, axis=1)
-    pairwise_distances = -2 * jnp.dot(high_dimensional_data, high_dimensional_data.T) + sum_X[:, jnp.newaxis] + sum_X
-
-    return pairwise_distances
+    # Efficient broadcasting for pairwise squared Euclidean distances
+    sum_X = jnp.sum(jnp.square(dim_data), axis=1)
+    D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X
+    return D
 
 @jit
 def calculate_row_wise_entropy(asym_affinities):
@@ -39,7 +37,7 @@ def calculate_row_wise_entropy(asym_affinities):
     jnp.ndarray: Row-wise Shannon entropy of shape (n_samples,)
     """
     asym_affinities = jnp.clip(asym_affinities, EPSILON, None)
-    return -jnp.sum(asym_affinities * jnp.log2(asym_affinities), axis=1)
+    return -jnp.sum(asym_affinities * jnp.log(asym_affinities), axis=1)
 
 @jit
 def calculate_row_wise_perplexities(asym_affinities):
@@ -54,142 +52,118 @@ def calculate_row_wise_perplexities(asym_affinities):
     """
     return 2 ** calculate_row_wise_entropy(asym_affinities)
 
-@jit
-def fill_diagonal(arr, value):
-    return arr.at[jnp.diag_indices(arr.shape[0])].set(value)
 
 
 @jit
-def compute_pairwise_probabilities(dist_mat, sigmas):
+def compute_pairwise_affinities(dist_mat, sigmas):
     """
-    Computes a pairwise probability matrix based on the distance matrix and sigma values.
+    Computes a pairwise affinity matrix based on the distance matrix and sigma values,
+    applying a Gaussian kernel with per-point bandwidths determined by sigma values.
 
     Parameters:
     dist_mat (jax.numpy.DeviceArray): A JAX array representing the distance matrix.
-    sigmas (jax.numpy.DeviceArray): A JAX array of sigma values for scaling.
-    epsilon (float): A small value to avoid division by zero.
+    sigmas (jax.numpy.DeviceArray): A JAX array of sigma values for scaling, one per data point.
 
     Returns:
-    jax.numpy.DeviceArray: The computed probability matrix.
+    jax.numpy.DeviceArray: The computed pairwise affinity matrix with diagonal elements set to zero.
     """
+    # Compute the Gaussian kernel values
+    numers = jnp.exp(-dist_mat / (2 * (sigmas ** 2)))
 
-    # Compute numerators
-    inner = (-dist_mat) / (2 * (sigmas ** 2))
-    numers = jnp.exp(inner)
-
-    # Compute denominators
+    # Compute the normalization factors, excluding diagonal elements
     denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
-    denoms = denoms[:, None] + EPSILON  # Reshape and avoid division by zero
+    denoms = denoms[:, None] + EPSILON  # Reshape and ensure non-zero denominator
 
-    # Calculate probabilities
+    # Calculate the pairwise affinities
     P = numers / denoms
 
-    # Set the diagonal to zero
+    # Set the diagonal elements to zero
     P = P.at[jnp.diag_indices_from(P)].set(0)
+
     return P
-
-@jit
-def pairwise_affinities(data, sigmas, dist_mat):
-    """Calculates the pairwise affinities p_{j|i} using the given values of sigma
-
-    Parameters:
-    data : jnp.ndarray of shape (n_samples, n_features)
-    sigmas : column array of shape (n_samples, 1)
-    dist_mat : data distance matrix; jnp.ndarray of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Pairwise affinity matrix of size (n_samples, n_samples)
-
-    """
-    assert sigmas.shape == (data.shape[0], 1)
-    assert data.shape[0] == sigmas.shape[0] == dist_mat.shape[0], "Inconsistent dimensions"
-    assert sigmas.shape[1] == 1, "Sigmas must be a column array"
-
-    return compute_pairwise_probabilities(dist_mat, sigmas)
 
 @jit
 def all_sym_affinities(data, perp, tol,  attempts=100):
     dist_mat = compute_pairwise_distances(data)
+    n_samples = data.shape[0]
+
     sigma_maxs = jnp.full(data.shape[0], 1e12)
     sigma_mins = jnp.full(data.shape[0], 1e-12)
-    current_perps = jnp.full(data.shape[0], jnp.inf)
     sigmas = (sigma_mins + sigma_maxs) / 2
-    P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat)
 
-    def outer_while_condition(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P = args
-        return jnp.logical_and(
-            jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
-            attempts > 0
-        )
+    P = compute_pairwise_affinities(dist_mat, sigmas.reshape(-1, 1))
 
-    def outer_while_body(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P= args
-        sigmas = (sigma_mins + sigma_maxs) / 2
-        P = pairwise_affinities(data, sigmas.reshape(-1,1), dist_mat)
-        current_perps = calculate_row_wise_perplexities(P)
-        attempts -= 1
+    current_perps = calculate_row_wise_perplexities(P)
 
-        def inner_while_condition(args):
-            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
-            return i < len(current_perps)
+    # Define the condition for continuing the binary search
+    def condition(vals):
+        _, attempts, _, _, _, _ = vals
+        return attempts > 0
 
-        def inner_while_body(args):
-            i, sigmas, sigma_maxs, sigma_mins, current_perps, perp = args
-            current_perp = current_perps[i]
-            sigma_maxs = sigma_maxs.at[i].set(jax.numpy.where(current_perp > perp, sigmas[i], sigma_maxs[i]))
-            sigma_mins = sigma_mins.at[i].set(jax.numpy.where(current_perp <= perp, sigmas[i], sigma_mins[i]))
-            return i + 1, sigmas, sigma_maxs, sigma_mins, current_perps, perp
+    # Define the body of the loop for binary search
+    def body(vals):
+        sigmas, attempts, sigma_maxs, sigma_mins, current_perps, P = vals
+        P = compute_pairwise_affinities(dist_mat, sigmas.reshape(-1, 1))
+        new_perps = calculate_row_wise_perplexities(P)
 
-        inner_while_args = (0, sigmas, sigma_maxs, sigma_mins, current_perps, perp)
-        (_, _, sigma_maxs, sigma_mins, _, _ ) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
+        # Update sigma bounds based on whether perplexity is too high or too low
+        sigma_maxs = jnp.where(new_perps > perp, sigmas, sigma_maxs)
+        sigma_mins = jnp.where(new_perps <= perp, sigmas, sigma_mins)
+        sigmas = (sigma_mins + sigma_maxs) / 2.0
 
-        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P
+        return (sigmas, attempts - 1, sigma_maxs, sigma_mins, new_perps, P)
 
-    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P)
-    (_, _, _, _, _, _, P) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+    # Execute the loop
+    sigmas, _, sigma_maxs, sigma_mins, current_perps, P = jax.lax.while_loop(
+        condition,
+        body,
+        (sigmas, attempts, sigma_maxs, sigma_mins, current_perps, P)
+    )
 
-    P = (P + P.T) / (2 * data.shape[0])
+    # Symmetrize the P matrix
+    P = (P + P.T) / (2 * n_samples)
 
     return P
+
 
 @jit
 def low_dim_affinities(Y_dist_mat):
     """
-    Computes the low-dimensional affinities matrix Q.
-
-    Parameters:
-    Y : Low-dimensional representation of the data, ndarray of shape (n_samples, n_components)
-    Y_dist_mat : Y distance matrix; ndarray of shape (n_samples, n_samples)
-
-    Returns:
-    Q : Symmetric low-dimensional affinities matrix of shape (n_samples, n_samples)
+    Optimized version of computing the low-dimensional affinities matrix Q.
     """
-    numers = (1 + Y_dist_mat) ** (-1)
-    denom = jnp.sum(numers) - jnp.sum(jnp.diag(numers))
-    denom += EPSILON  # Avoid div/0
+    # Directly compute the numerators and the normalization factor in one step
+    numers = 1 / (1 + Y_dist_mat)
+
+    # Avoid computing the diagonal sum by subtracting it after summing all elements
+    sum_all = jnp.sum(numers)
+    sum_diag = jnp.sum(jnp.diag(numers))
+    denom = sum_all - sum_diag + EPSILON  # Adjust for division by zero
+
+    # Compute Q without explicitly filling the diagonal with zeros
     Q = numers / denom
-    Q = fill_diagonal(Q,0)
+
+    # Ensure the diagonal is zero by subtracting its values divided by denom
+    # This step is more efficient than setting the diagonal to zero explicitly
+    Q -= jnp.diag(jnp.diag(numers) / denom)
+
     return Q
 
 @jit
 def compute_grad(P, Q, Y, Y_dist_mat):
-    """
-    Computes the gradient vector needed to update the Y values.
+    # Compute pairwise differences more directly
+    Ydiff = Y[:, None, :] - Y[None, :, :]
 
-    Parameters:
-    P : Symmetric affinities matrix of shape (n_samples, n_samples)
-    Q : Symmetric low-dimensional affinities matrix of shape (n_samples, n_samples)
-    Y : Low-dimensional representation of the data, ndarray of shape (n_samples, n_components)
-    Y_dist_mat : Y distance matrix; ndarray of shape (n_samples, n_samples)
+    # Compute the pq_factor considering broadcasting, no need for explicit newaxis
+    pq_factor = P - Q
 
-    Returns:
-    grad : The gradient vector, shape (n_samples, n_components)
-    """
-    Ydiff = Y[:, jnp.newaxis, :] - Y[jnp.newaxis, :, :]
-    pq_factor = (P - Q)[:, :, jnp.newaxis]
-    dist_factor = ((1 + Y_dist_mat) ** (-1))[:, :, jnp.newaxis]
-    return jnp.sum(4 * pq_factor * Ydiff * dist_factor, axis=1)
+    # Compute the dist_factor considering broadcasting
+    dist_factor = 1 / (1 + Y_dist_mat)
+
+    # Compute the gradient without explicitly expanding pq_factor and dist_factor
+    grad = 4 * jnp.sum(pq_factor[:, :, None] * Ydiff * dist_factor[:, :, None], axis=1)
+
+    return grad
+
 
 @jit
 def momentum_func(t):
@@ -201,7 +175,7 @@ def momentum_func(t):
     Returns:
     float: Represents the momentum term added to the gradient.
     """
-    return jnp.where(t < 250, 0.5, 0.8)
+    return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
 
 
 def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_dimensions,
