@@ -83,6 +83,14 @@ def compute_pairwise_affinities(dist_mat, sigmas):
 
     return P
 
+def print_attempts(value):
+  """Prints the value on the host machine."""
+  print(f"attempts remaining: {value}")
+
+def print_perplexity_diff(value):
+  """Prints the value on the host machine."""
+  print(f"Perplexity difference: {value}")
+
 @jit
 def all_sym_affinities(data, perp, tol,  attempts=100):
     dist_mat = compute_pairwise_distances(data)
@@ -98,8 +106,14 @@ def all_sym_affinities(data, perp, tol,  attempts=100):
 
     # Define the condition for continuing the binary search
     def condition(vals):
-        _, attempts, _, _, _, _ = vals
-        return attempts > 0
+        _, attempts, _, _, current_perps, _ = vals
+        # Calculate the absolute difference between current and desired perplexities
+        perp_diff = jnp.abs(current_perps - perp)
+        host_callback.call(print_attempts, attempts)
+        host_callback.call(print_perplexity_diff,
+                           jnp.mean(perp_diff))  # Calculate and print average perplexity difference
+        # Check if average perplexity is within tolerance and if there are attempts left
+        return jnp.logical_and(jnp.mean(perp_diff) > tol, attempts > 0)
 
     # Define the body of the loop for binary search
     def body(vals):
@@ -123,6 +137,7 @@ def all_sym_affinities(data, perp, tol,  attempts=100):
 
     # Symmetrize the P matrix
     P = (P + P.T) / (2 * n_samples)
+    # Check if loop exited due to attempts being exhausted
 
     return P
 
@@ -183,7 +198,7 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
                                       perplexity, max_iterations=100,
                                       learning_rate=100, scaling_factor=4.,
                                       random_state=42,
-                                      perp_tol=1e-8):
+                                      perp_tol=1e-2):
 
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
