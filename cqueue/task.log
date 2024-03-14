@@ -28,3 +28,4 @@
 2024-02-10 00:30:53,943 INFO: t-SNE task completed. [in /home/rajesh/PycharmProjects/tsnejaxproject/cqueue/tasks.py:56]
 2024-02-10 13:10:19,526 INFO: t-SNE task completed. [in /home/rajesh/PycharmProjects/tsnejaxproject/cqueue/tasks.py:56]
 2024-02-10 13:12:01,203 INFO: t-SNE task completed. [in /home/rajesh/PycharmProjects/tsnejaxproject/cqueue/tasks.py:56]
+2024-03-14 20:55:25,160 INFO: t-SNE task completed using sklearn approach. [in /home/rajesh/PycharmProjects/tsnejaxproject/cqueue/tasks.py:79]
