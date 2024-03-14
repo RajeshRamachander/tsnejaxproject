@@ -8,7 +8,7 @@ from jax import devices
 
 
 EPSILON = 1e-12
-jax.config.update("jax_enable_x64", True)
+
 
 @jit
 def compute_pairwise_distances(dim_data):
@@ -196,8 +196,8 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
     P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
-    init_mean = jnp.zeros(num_dimensions, dtype=jnp.float64)
-    init_cov = jnp.eye(num_dimensions, dtype=jnp.float64) * 1e-4
+    init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
+    init_cov = jnp.eye(num_dimensions, dtype=jnp.float32) * 1e-4
 
     # Ensure the random key is generated correctly
     rand = random.PRNGKey(random_state)
