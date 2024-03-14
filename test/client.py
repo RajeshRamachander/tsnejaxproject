@@ -107,54 +107,7 @@ class SimpleDataProcessor(DataProcessor):
         return transmit_data
 
 
-    
 
-# class CIFAR10DataProcessor(DataProcessor):
-#
-#     def __init__(self):
-#         self.classes = None
-#
-#     def prepare_data(self):
-#         # Load CIFAR-10 data
-#         (x_train, y_train), (_, _) = cifar10.load_data()
-#
-#         # Select a random subset of the data
-#         rand_idx = np.random.choice(np.arange(x_train.shape[0]), size=SIZE, replace=False)
-#         data = x_train[rand_idx]
-#         self.classes = y_train[rand_idx].flatten()  # Flatten the class labels array
-#
-#         # Assuming the server expects data in a flattened form
-#         # Flatten the images: (SIZE, 32, 32, 3) -> (SIZE, 3072)
-#         data = data.reshape(SIZE, -1)
-#
-#         transmit_data = {
-#             'data': data.tolist(),  # Convert the numpy array to a list for JSON serialization
-#             'num_dimensions': 2,
-#             'perplexity': 30,
-#             'num_iterations': 500,
-#             'learning_rate': 100,
-#             'batch_size': 100,
-#             'pbar': True,
-#             'use_ntk': False
-#         }
-#
-#         return transmit_data
-#
-#     def output_data_processor(self, processed_result):
-#         if processed_result is not None:
-#             result_received = processed_result.replace("Result received: ", "")
-#             low_dim = ast.literal_eval(result_received)
-#             low_dim = np.array(low_dim)
-#
-#             rcParams["font.size"] = 18
-#             rcParams["figure.figsize"] = (12, 8)
-#
-#             scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], c=self.classes, cmap='viridis', alpha=0.6)
-#             plt.colorbar(scatter, label='Classes')
-#             plt.title("CIFAR-10 Data Visualized")
-#             plt.xlabel("Dimension 1")
-#             plt.ylabel("Dimension 2")
-#             plt.show()
 
 if __name__ == '__main__':
     server_communicator = ServerCommunicator()
