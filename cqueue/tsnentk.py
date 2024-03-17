@@ -159,10 +159,48 @@ def get_kernel_by_resnet(inputs):
     return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'ntk')
 
 
+def HeNormalInitializer(key, shape, dtype=jnp.float32):
+    """He normal initializer."""
+    fan_in = shape[0]
+    std = jnp.sqrt(2.0 / fan_in)
+    return std * random.normal(key, shape, dtype)
+
+def get_kernel_by_deep_network2(input):
+    seed = 0  # This can be any number, and you'll use it to generate a random key
+
+    # Generate a main RNG key
+    rng_key = random.PRNGKey(seed)
+
+    # Split the key into subkeys for each layer's initialization
+    num_layers = 16  # Total number of layers needing an RNG key in your network
+    rng_keys = random.split(rng_key, num=num_layers)
+    # Define your neural network architecture
+    init_fn, apply_fn, kernel_fn = stax.serial(
+        stax.Dense(8192, W_init=HeNormalInitializer(rng_keys[0]), b_init=random.normal(rng_keys[1])),
+        stax.Relu(),
+        stax.Dense(4096, W_init=HeNormalInitializer(rng_keys[2]), b_init=random.normal(rng_keys[3])),
+        stax.Relu(),
+        stax.Dense(2048, W_init=HeNormalInitializer(rng_keys[4]), b_init=random.normal(rng_keys[5])),
+        stax.Relu(),
+        stax.Dense(1024, W_init=HeNormalInitializer(rng_keys[6]), b_init=random.normal(rng_keys[7])),
+        stax.Relu(),
+        stax.Dense(512, W_init=HeNormalInitializer(rng_keys[8]), b_init=random.normal(rng_keys[9])),
+        stax.Relu(),
+        stax.Dense(256, W_init=HeNormalInitializer(rng_keys[10]), b_init=random.normal(rng_keys[11])),
+        stax.Relu(),
+        stax.Dense(128, W_init=HeNormalInitializer(rng_keys[12]), b_init=random.normal(rng_keys[13])),
+        stax.Relu(),
+        stax.Flatten(),
+        stax.Dense(10, W_init=HeNormalInitializer(rng_keys[14]), b_init=random.normal(rng_keys[15]))
+    )
+
+    return kernel_fn(input, input, 'ntk')
+
+
 @jit
 def compute_ntk_matrix(inputs):
 
-    return get_kernel_by_deep_network(inputs)
+    return get_kernel_by_deep_network2(inputs)
 
 
 @jit

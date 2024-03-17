@@ -13,7 +13,8 @@ async def async_output_data_processor(data_processor, processed_result):
 
 async def main_async():
     server_communicator = ServerCommunicator()
-    algorithms = ['ntk', 
+    algorithms = [
+                'ntk', 
                 #   'jax_tsne', 
                 #   'sklearn_tsne'
                   ]
