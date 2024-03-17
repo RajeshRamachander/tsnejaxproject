@@ -198,7 +198,7 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
                                       perplexity, max_iterations=100,
                                       learning_rate=100, scaling_factor=4.,
                                       random_state=42,
-                                      perp_tol=1e-2):
+                                      perp_tol=.1):
 
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
@@ -208,7 +208,8 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
         print('Data is on GPU')
 
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol,
+                           attempts=75) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)

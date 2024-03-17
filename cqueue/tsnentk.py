@@ -56,48 +56,52 @@ def calculate_row_wise_perplexities(asym_affinities):
     """
     return 2 ** calculate_row_wise_entropy(asym_affinities)
 
+def preprocess_inputs(inputs):
+    X = inputs.reshape(-1, 8, 8, 1)  # Reshape
+    X = X / 255.0  # Normalize
+    return X
 
-@jit
-def compute_ntk_matrix(inputs):
+def basic_cnn_architecture():
+    return stax.serial(
+        stax.Conv(32, (3, 3), padding='SAME'),
+        stax.Relu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+        stax.Flatten(),
+        stax.Dense(256),
+        stax.Relu(),
+        stax.Dense(10)
+    )
 
-    # Reshape the data for the convolutional network
-    # X = inputs.reshape(-1, 8, 8, 1)  # Reshape to [batch_size, height, width, channels]
-    # X = X / 16.0  # Normalize pixel values
-    #
-    # # init_fn, apply_fn, kernel_fn = stax.serial(
-    # #     stax.Conv(32, (3, 3), padding="SAME"), stax.Relu(),
-    # #     stax.Conv(64, (3, 3), padding="SAME"), stax.Relu(),
-    # #     stax.Conv(128, (3, 3), padding="SAME"), stax.Relu(),
-    # #     stax.AvgPool((2, 2)),  # Average pooling can be used to reduce dimensionality
-    # #     stax.Flatten(),
-    # #     stax.Dense(100), stax.Relu(),
-    # #     stax.Dense(10)
-    # # )
-    #
-    # init_fn, apply_fn, kernel_fn = stax.serial(
-    #     # First Convolutional Block
-    #     stax.Conv(32, (3, 3), padding='SAME'),  # 32 filters, 3x3 kernel
-    #     stax.Relu(),
-    #
-    #     # Second Convolutional Block
-    #     stax.Conv(64, (3, 3), padding='SAME'),  # 64 filters, 3x3 kernel
-    #     stax.Relu(),
-    #
-    #     # Third Convolutional Block
-    #     stax.Conv(128, (3, 3), padding='SAME'),  # 128 filters, 3x3 kernel
-    #     stax.Relu(),
-    #     stax.AvgPool((2, 2), strides=(2, 2)),  # Average pooling with 2x2 kernel
-    #
-    #     # Fully Connected Layers
-    #     stax.Flatten(),  # Flatten the output of the last pooling layer
-    #     stax.Dense(256),  # Fully connected layer with 256 units
-    #     stax.Relu(),
-    #
-    #     # Output Layer
-    #     stax.Dense(10),  # Adjust the number of units to match the number of classes
-    # )
+def advanced_cnn_architecture():
+    return stax.serial(
+        stax.Conv(32, (3, 3), padding='SAME'),
+        stax.Relu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+        stax.Dropout(0.1),
+        stax.Conv(64, (3, 3), padding='SAME'),
+        stax.Relu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+        stax.Dropout(0.2),
+        stax.Conv(128, (3, 3), padding='SAME'),
+        stax.Relu(),
+        stax.GlobalSumPool(),
+        stax.Dropout(0.3),
+        stax.Dense(256),
+        stax.Relu(),
+        stax.Dropout(0.5),
+        stax.Dense(10)
+    )
 
-    X = inputs
+
+def get_kernel_by_convlution(inputs):
+
+    preprocessed_inputs = preprocess_inputs(inputs)
+
+    init_fn, apply_fn, kernel_fn = advanced_cnn_architecture()
+
+    return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'nngp')
+
+def get_kernel_by_deep_network(input):
 
     # Define your neural network architecture
     init_fn, apply_fn, kernel_fn = stax.serial(
@@ -111,8 +115,54 @@ def compute_ntk_matrix(inputs):
         stax.Flatten(), stax.Dense(10)
     )
 
-    # Compute the neural tangent kernel
-    return kernel_fn(X, X, 'ntk')
+    return kernel_fn(input, input, 'ntk')
+
+def SimplifiedWideResnetBlock(channels, strides=(1, 1), channel_mismatch=False):
+    Main = stax.serial(
+        stax.Relu(), stax.Conv(channels, (3, 3), strides, padding='SAME'),
+        stax.Relu(), stax.Conv(channels, (3, 3), padding='SAME'))
+    Shortcut = stax.Identity() if not channel_mismatch else stax.Conv(
+        channels, (3, 3), strides, padding='SAME')
+    return stax.serial(stax.FanOut(2),
+                       stax.parallel(Main, Shortcut),
+                       stax.FanInSum())
+
+def SimplifiedWideResnetGroup(n, channels, strides=(1, 1)):
+    blocks = [SimplifiedWideResnetBlock(channels, strides, channel_mismatch=True)]
+    for _ in range(n - 1):
+        blocks.append(SimplifiedWideResnetBlock(channels, (1, 1)))
+    return stax.serial(*blocks)
+
+def SimplifiedWideResnet(block_size, k, num_classes):
+    return stax.serial(
+        stax.Conv(16, (3, 3), padding='SAME'),
+        SimplifiedWideResnetGroup(block_size, int(16 * k)),  # Reduced number of groups
+        SimplifiedWideResnetGroup(block_size, int(32 * k), ),
+        SimplifiedWideResnetGroup(block_size, int(64 * k), ),
+        SimplifiedWideResnetGroup(block_size, int(128 * k), ),
+        SimplifiedWideResnetGroup(block_size, int(64 * k), ),
+        SimplifiedWideResnetGroup(block_size, int(32 * k), ),
+        SimplifiedWideResnetGroup(block_size, int(16 * k), ),
+        stax.AvgPool((8, 8)),
+        stax.Flatten(),
+        stax.Dense(num_classes))
+
+
+
+def get_kernel_by_resnet(inputs):
+
+    preprocessed_inputs = preprocess_inputs(inputs)
+
+    # Define your neural network architecture
+    init_fn, apply_fn, kernel_fn = SimplifiedWideResnet(block_size=4, k=1, num_classes=10)
+
+    return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'ntk')
+
+
+@jit
+def compute_ntk_matrix(inputs):
+
+    return get_kernel_by_deep_network(inputs)
 
 
 @jit
@@ -130,16 +180,29 @@ def compute_pairwise_affinities(ntk_matrix, sigmas):
     # Ensure sigmas is correctly shaped for row-wise broadcasting
     sigmas = sigmas.reshape(-1, 1)
 
-    # Normalize the NTK matrix by the sigma values for each row
-    normalized_scores = ntk_matrix / sigmas
+    # Compute the Gaussian kernel values
+    numers = jnp.exp(-ntk_matrix / (2 * (sigmas ** 2)))
 
-    # Apply softmax to the normalized scores
-    probabilities = softmax(normalized_scores, axis=1)
+    # Compute the normalization factors, excluding diagonal elements
+    denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
+    denoms = denoms[:, None] + EPSILON  # Reshape and ensure non-zero denominator
+
+    # Calculate the pairwise affinities
+    P = numers / denoms
 
     # Set the diagonal elements to zero
-    probabilities = probabilities.at[jnp.diag_indices_from(probabilities)].set(0)
+    P = P.at[jnp.diag_indices_from(P)].set(0)
 
-    return probabilities
+    # # Normalize the NTK matrix by the sigma values for each row
+    # normalized_scores = ntk_matrix / sigmas
+    #
+    # # Apply softmax to the normalized scores
+    # probabilities = softmax(normalized_scores, axis=1)
+
+    # Set the diagonal elements to zero
+    # probabilities = probabilities.at[jnp.diag_indices_from(probabilities)].set(0)
+
+    return P
 
 def print_attempts(value):
   """Prints the value on the host machine."""
@@ -251,9 +314,9 @@ def momentum_func(t):
 
 def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
                                       perplexity, max_iterations=100,
-                                      learning_rate=100, scaling_factor=4.,
+                                      learning_rate=10, scaling_factor=1.,
                                       random_state=42,
-                                      perp_tol=1e-2):
+                                      perp_tol=0.1):
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
         jax.config.update('jax_platform_name', 'gpu')
@@ -261,8 +324,8 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
         high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
         print('Data is on GPU')
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity,
-                           perp_tol) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol,
+                           attempts=75) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)

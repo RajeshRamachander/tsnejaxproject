@@ -13,11 +13,14 @@ async def async_output_data_processor(data_processor, processed_result):
 
 async def main_async():
     server_communicator = ServerCommunicator()
-    algorithms = ['ntk', 'jax_tsne', 'sklearn_tsne']
-
+    algorithms = ['ntk', 
+                #   'jax_tsne', 
+                #   'sklearn_tsne'
+                  ]
+   
     for algorithm in algorithms[::-1]:
         print(f"Starting t-SNE with {algorithm} algorithm.")
-        data_processor = SimpleDataProcessor(algorithm)
+        data_processor = SimpleDataProcessor(algorithm, size = 200)
 
         main_data = data_processor.prepare_data()
         response = server_communicator.start_task(main_data)
