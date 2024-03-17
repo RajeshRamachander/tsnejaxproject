@@ -385,7 +385,7 @@ def get_kernel_by_deep_network2_conv_enhanced(input_shape):
 @jit
 def compute_ntk_matrix(inputs):
 
-    return get_kernel_by_deep_network(inputs)
+    return get_kernel_by_deep_network2_adjusted(inputs)
 
 
 @jit
@@ -417,7 +417,7 @@ def compute_pairwise_affinities(ntk_matrix, sigmas):
     # Normalize the NTK matrix by the sigma values for each row
     # normalized_scores = ntk_matrix / sigmas
 
-    normalized_scores = jnp.exp(ntk_matrix)  / (sigmas * sigmas.T)
+    normalized_scores = ntk_matrix  / (sigmas * sigmas.T)
     # Apply softmax to the normalized scores
     P = softmax(normalized_scores, axis=1)
 

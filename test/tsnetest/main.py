@@ -15,8 +15,8 @@ async def main_async():
     server_communicator = ServerCommunicator()
     algorithms = [
                 'ntk', 
-                  'jax_tsne', 
-                  'sklearn_tsne'
+                #   'jax_tsne', 
+                #   'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
