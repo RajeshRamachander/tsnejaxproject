@@ -385,7 +385,7 @@ def get_kernel_by_deep_network2_conv_enhanced(input_shape):
 @jit
 def compute_ntk_matrix(inputs):
 
-    return get_kernel_by_deep_network2_conv3(inputs)
+    return get_kernel_by_deep_network(inputs)
 
 
 @jit
@@ -403,27 +403,26 @@ def compute_pairwise_affinities(ntk_matrix, sigmas):
     # Ensure sigmas is correctly shaped for row-wise broadcasting
     sigmas = sigmas.reshape(-1, 1)
 
-    # Compute the Gaussian kernel values
-    numers = jnp.exp(-ntk_matrix / (2 * (sigmas ** 2)))
+    # # Compute the Gaussian kernel values
+    # numers = jnp.exp(-ntk_matrix / (2 * (sigmas ** 2)))
+    #
+    # # Compute the normalization factors, excluding diagonal elements
+    # denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
+    # denoms = denoms[:, None] + EPSILON  # Reshape and ensure non-zero denominator
+    #
+    # # Calculate the pairwise affinities
+    # P = numers / denoms
 
-    # Compute the normalization factors, excluding diagonal elements
-    denoms = jnp.sum(numers, axis=1) - jnp.diag(numers)
-    denoms = denoms[:, None] + EPSILON  # Reshape and ensure non-zero denominator
 
-    # Calculate the pairwise affinities
-    P = numers / denoms
+    # Normalize the NTK matrix by the sigma values for each row
+    # normalized_scores = ntk_matrix / sigmas
+
+    normalized_scores = jnp.exp(ntk_matrix)  / (sigmas * sigmas.T)
+    # Apply softmax to the normalized scores
+    P = softmax(normalized_scores, axis=1)
 
     # Set the diagonal elements to zero
     P = P.at[jnp.diag_indices_from(P)].set(0)
-
-    # # Normalize the NTK matrix by the sigma values for each row
-    # normalized_scores = ntk_matrix / sigmas
-    #
-    # # Apply softmax to the normalized scores
-    # probabilities = softmax(normalized_scores, axis=1)
-
-    # Set the diagonal elements to zero
-    # probabilities = probabilities.at[jnp.diag_indices_from(probabilities)].set(0)
 
     return P
 
