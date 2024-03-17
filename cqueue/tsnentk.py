@@ -159,48 +159,233 @@ def get_kernel_by_resnet(inputs):
     return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'ntk')
 
 
-def HeNormalInitializer(key, shape, dtype=jnp.float32):
-    """He normal initializer."""
-    fan_in = shape[0]
-    std = jnp.sqrt(2.0 / fan_in)
-    return std * random.normal(key, shape, dtype)
+
+def HeNormal():
+    def init(key, shape, dtype=jnp.float32):
+        """He normal initializer."""
+        fan_in = shape[1]  # Assuming shape is (n_features, n_units_out)
+        std = jnp.sqrt(2.0 / fan_in)
+        return std * random.normal(key, shape, dtype)
+    return init
 
 def get_kernel_by_deep_network2(input):
-    seed = 0  # This can be any number, and you'll use it to generate a random key
 
-    # Generate a main RNG key
-    rng_key = random.PRNGKey(seed)
-
-    # Split the key into subkeys for each layer's initialization
-    num_layers = 16  # Total number of layers needing an RNG key in your network
-    rng_keys = random.split(rng_key, num=num_layers)
     # Define your neural network architecture
     init_fn, apply_fn, kernel_fn = stax.serial(
-        stax.Dense(8192, W_init=HeNormalInitializer(rng_keys[0]), b_init=random.normal(rng_keys[1])),
-        stax.Relu(),
-        stax.Dense(4096, W_init=HeNormalInitializer(rng_keys[2]), b_init=random.normal(rng_keys[3])),
-        stax.Relu(),
-        stax.Dense(2048, W_init=HeNormalInitializer(rng_keys[4]), b_init=random.normal(rng_keys[5])),
-        stax.Relu(),
-        stax.Dense(1024, W_init=HeNormalInitializer(rng_keys[6]), b_init=random.normal(rng_keys[7])),
-        stax.Relu(),
-        stax.Dense(512, W_init=HeNormalInitializer(rng_keys[8]), b_init=random.normal(rng_keys[9])),
-        stax.Relu(),
-        stax.Dense(256, W_init=HeNormalInitializer(rng_keys[10]), b_init=random.normal(rng_keys[11])),
-        stax.Relu(),
-        stax.Dense(128, W_init=HeNormalInitializer(rng_keys[12]), b_init=random.normal(rng_keys[13])),
-        stax.Relu(),
+        stax.Dense(8192, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(4096, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(2048, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(1024, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(512, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(256, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(128, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
         stax.Flatten(),
-        stax.Dense(10, W_init=HeNormalInitializer(rng_keys[14]), b_init=random.normal(rng_keys[15]))
+        stax.Dense(10)
+    )
+
+    return kernel_fn(input, input, 'ntk')
+
+def get_kernel_by_deep_network2_adjusted(input):
+
+    # Define an adjusted neural network architecture
+    init_fn, apply_fn, kernel_fn = stax.serial(
+        stax.Dense(8192 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(4096 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(2048 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # Additional layer to increase depth
+        stax.Dense(1024, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(512, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(256, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(128, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # Extra layer for more depth
+        stax.Dense(64, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Flatten(),
+        stax.Dense(10)
     )
 
     return kernel_fn(input, input, 'ntk')
 
 
+def get_kernel_by_deep_network2_conv(input_shape):
+
+    preproscessed_inputs = preprocess_inputs(input_shape)
+    # Define a neural network architecture with convolutional layers
+    init_fn, apply_fn, kernel_fn = stax.serial(
+        # Convolutional Block 1
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Convolutional Block 2
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+        # Transition to Dense Layers
+        stax.Flatten(),
+        stax.Dense(2048, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dense(1024, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+
+        # Output Layer
+        stax.Dense(10, W_std=1.5, b_std=0.05)
+    )
+
+    return kernel_fn(preproscessed_inputs, preproscessed_inputs, 'ntk')
+
+def get_kernel_by_deep_network2_conv2(input_shape):
+
+    preproscessed_inputs = preprocess_inputs(input_shape)
+    # Define a neural network architecture with convolutional layers
+    init_fn, apply_fn, kernel_fn = stax.serial(
+        # Convolutional Block 1
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Convolutional Block 2
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+        # Additional Convolutional Block
+        stax.Conv(512, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Conv(512, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+
+
+        # Transition to Dense Layers
+        stax.Flatten(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(8192 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(4096 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(2048 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.2),
+
+
+        # Output Layer
+        stax.Dense(10, W_std=1.5, b_std=0.05)
+    )
+
+    return kernel_fn(preproscessed_inputs, preproscessed_inputs, 'ntk')
+
+
+def get_kernel_by_deep_network2_conv3(input_shape):
+  preprocessed_inputs = preprocess_inputs(input_shape)
+
+  # Define convolutional block with reuse
+  def conv_block(num_filters):
+    return stax.serial(
+        stax.Conv(num_filters, (3, 3), padding='SAME', W_std=1.5, b_std=0.05),
+        stax.LayerNorm(),
+        stax.Gelu(),
+        stax.AvgPool((2, 2), strides=(2, 2))
+    )
+
+  # Define the network architecture
+  init_fn, apply_fn, kernel_fn = stax.serial(
+      # Convolutional blocks
+      conv_block(64),
+      conv_block(128),
+      # Additional convolutional block (optional)
+      # stax.serial(...),
+
+      # Transition to dense layers
+      stax.Flatten(),
+      stax.Dropout(0.5),
+      stax.Dense(8192, W_std=1.5, b_std=0.05),
+      stax.LayerNorm(),
+      stax.Gelu(),
+      stax.Dropout(0.5),
+      stax.Dense(4096, W_std=1.5, b_std=0.05),
+      stax.LayerNorm(),
+      stax.Gelu(),
+      stax.Dropout(0.5),
+      stax.Dense(2048, W_std=1.5, b_std=0.05),
+      stax.LayerNorm(),
+      stax.Gelu(),
+      stax.Dropout(0.2),
+
+      # Output layer
+      stax.Dense(10, W_std=1.5, b_std=0.05)
+  )
+
+  return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'ntk')
+
+
+
+def get_kernel_by_deep_network2_conv_enhanced(input_shape):
+    # Simulated preprocessing step (ensure this matches your real preprocessing)
+    preprocessed_inputs = preprocess_inputs(input_shape)
+
+    init_fn, apply_fn, kernel_fn = stax.serial(
+            # Convolutional Block 1
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(64, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Convolutional Block 2
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(128, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Additional Convolutional Block
+            stax.Conv(256, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(256, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Additional Convolutional Block
+            stax.Conv(512, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(512, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+            # Additional Convolutional Block
+            stax.Conv(1024, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.Conv(1024, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+            stax.AvgPool((2, 2), strides=(2, 2)),
+
+        stax.Conv(2048, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Conv(2048, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+
+        stax.Conv(4096, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Conv(4096, (3, 3), padding='SAME', W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.AvgPool((2, 2), strides=(2, 2)),
+
+        # Transition to Dense Layers with Dropout for Regularization
+        stax.Flatten(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(8192 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(4096 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        stax.Dense(2048 * 2, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        # # Additional layer to increase depth
+        # stax.Dense(1024, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        # stax.Dense(512, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        # stax.Dense(256, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        # stax.Dense(128, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # stax.Dropout(0.5),  # Adjust dropout rate as necessary
+        # # Extra layer for more depth
+        # stax.Dense(64, W_std=1.5, b_std=0.05), stax.LayerNorm(), stax.Gelu(),
+        # stax.Dropout(0.5),  # Adjust dropout rate as necessary
+
+        # Output Layer
+        stax.Dense(10)
+    )
+
+    return kernel_fn(preprocessed_inputs, preprocessed_inputs, 'ntk')
+
+
 @jit
 def compute_ntk_matrix(inputs):
 
-    return get_kernel_by_deep_network2(inputs)
+    return get_kernel_by_deep_network2_conv3(inputs)
 
 
 @jit
