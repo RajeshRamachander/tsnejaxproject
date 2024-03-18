@@ -5,9 +5,36 @@ from jax import jit
 from tqdm import tqdm
 from jax.experimental import host_callback
 from jax import devices
+from jax.numpy.linalg import svd
+
 
 
 EPSILON = 1e-12
+
+@jit
+def pca_jax(X, k=30):
+    """
+    Use PCA to project X to k dimensions using JAX.
+
+    Parameters:
+    X (jax.numpy.ndarray): The input data array.
+    k (int): The number of principal components to retain.
+
+    Returns:
+    jax.numpy.ndarray: The projected data in k dimensions.
+    """
+    # Center and scale the data
+    s = jnp.std(X, axis=0)
+    s = jnp.where(s == 0, 1, s)  # Avoid division by zero
+    X_centered_scaled = (X - jnp.mean(X, axis=0)) / s
+
+    # Compute SVD
+    U, S, Vh = svd(X_centered_scaled, full_matrices=False)
+
+    # Project data onto the first k principal components
+    X_pca = U[:, :k] * S[:k]
+
+    return X_pca
 
 
 @jit
@@ -206,6 +233,9 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
         print('Using GPU')
         high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
         print('Data is on GPU')
+
+    if high_dimensional_data.shape[1] > 30:
+        high_dimensional_data = pca_jax(high_dimensional_data)
 
 
     P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol,

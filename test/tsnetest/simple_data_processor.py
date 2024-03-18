@@ -19,6 +19,7 @@ class SimpleDataProcessor:
         try:
             digits, digit_class = load_digits(return_X_y=True)
             rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
+            print(digits.shape[1])
             data = digits[rand_idx, :]
             self.classes = digit_class[rand_idx]
 

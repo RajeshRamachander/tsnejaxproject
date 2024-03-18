@@ -7,10 +7,36 @@ from neural_tangents import stax
 from jax.experimental import host_callback
 from jax import devices
 from jax.nn import softmax
+from jax.numpy.linalg import svd
 
 
 
 EPSILON = 1e-12
+
+@jit
+def pca_jax(X, k=30):
+    """
+    Use PCA to project X to k dimensions using JAX.
+
+    Parameters:
+    X (jax.numpy.ndarray): The input data array.
+    k (int): The number of principal components to retain.
+
+    Returns:
+    jax.numpy.ndarray: The projected data in k dimensions.
+    """
+    # Center and scale the data
+    s = jnp.std(X, axis=0)
+    s = jnp.where(s == 0, 1, s)  # Avoid division by zero
+    X_centered_scaled = (X - jnp.mean(X, axis=0)) / s
+
+    # Compute SVD
+    U, S, Vh = svd(X_centered_scaled, full_matrices=False)
+
+    # Project data onto the first k principal components
+    X_pca = U[:, :k] * S[:k]
+
+    return X_pca
 
 @jit
 def compute_pairwise_distances(dim_data):
@@ -417,7 +443,7 @@ def compute_pairwise_affinities(ntk_matrix, sigmas):
     # Normalize the NTK matrix by the sigma values for each row
     # normalized_scores = ntk_matrix / sigmas
 
-    normalized_scores = ntk_matrix  / (sigmas * sigmas.T)
+    normalized_scores = ntk_matrix  / sigmas * sigmas.T
     # Apply softmax to the normalized scores
     P = softmax(normalized_scores, axis=1)
 
@@ -434,6 +460,10 @@ def print_perplexity_diff(value):
   """Prints the value on the host machine."""
   print(f"Perplexity difference: {value}")
 
+def print_intial_perplexity(value):
+  """Prints the value on the host machine."""
+  print(f"Perplexity initial value: {value}")
+
 @jit
 def all_sym_affinities(data, perp, tol,  attempts=100):
     ntk_mat = compute_ntk_matrix(data)
@@ -445,6 +475,9 @@ def all_sym_affinities(data, perp, tol,  attempts=100):
 
     P = compute_pairwise_affinities(ntk_mat, sigmas.reshape(-1, 1))
     current_perps = calculate_row_wise_perplexities(P)
+
+    host_callback.call(print_intial_perplexity,
+                       current_perps)
 
     def condition(vals):
         _, attempts, _, _, current_perps, _ = vals
@@ -545,6 +578,9 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
         print('Using GPU')
         high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
         print('Data is on GPU')
+
+    if high_dimensional_data.shape[1] > 30:
+        high_dimensional_data = pca_jax(high_dimensional_data)
 
     P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol,
                            attempts=75) * scaling_factor

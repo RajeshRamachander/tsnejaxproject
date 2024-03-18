@@ -15,8 +15,8 @@ async def main_async():
     server_communicator = ServerCommunicator()
     algorithms = [
                 'ntk', 
-                #   'jax_tsne', 
-                #   'sklearn_tsne'
+                  'jax_tsne', 
+                  'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
@@ -29,6 +29,7 @@ async def main_async():
                                              )
 
         main_data = data_processor.prepare_data()
+        
         response = server_communicator.start_task(main_data)
 
         if response.status_code == 202:
