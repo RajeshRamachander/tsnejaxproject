@@ -8,19 +8,8 @@ from jax.experimental import host_callback
 from jax.numpy.linalg import svd
 
 
-
 @jit
 def pca_jax(X, k=30):
-    """
-    Use PCA to project X to k dimensions using JAX.
-
-    Parameters:
-    X (jax.numpy.ndarray): The input data array.
-    k (int): The number of principal components to retain.
-
-    Returns:
-    jax.numpy.ndarray: The projected data in k dimensions.
-    """
     # Center and scale the data
     s = jnp.std(X, axis=0)
     s = jnp.where(s == 0, 1, s)  # Avoid division by zero
@@ -50,16 +39,17 @@ def get_probabiility_at_ij(d, scale, i):
 
 @jit
 def get_shannon_entropy(p):
-    """Calculates 2 ** H(p) of array p, where H(p) is the Shannon entropy."""
+    """2 ** H(p) of array p, where H(p) is the Shannon entropy."""
     return 2 ** jnp.sum(-p * jnp.log2(p + 1e-10))
 
 def print_attempts(value):
   """Prints the value on the host machine."""
   print(f"attempts done: {value}")
-@jit
-def all_sym_affinities(data, data_mat, perp, tol, attempts=250):
 
-    n_samples = data.shape[0]
+@jit
+def all_sym_affinities(data_mat, perp, tol, attempts=250):
+
+    n_samples = data_mat.shape[0]
 
     # Correctly initialize P outside the loop
     P = jnp.zeros(data_mat.shape)
@@ -96,16 +86,23 @@ def all_sym_affinities(data, data_mat, perp, tol, attempts=250):
     P = jax.lax.fori_loop(0, n_samples, body_fun, P)
     return (P + P.T) / (2 * n_samples)
 
-
 @jit
-def compute_grad(P, Q, Y_dists, Y):
-    pq_factor = P-Q
+def compute_grad(R, Y_dists, Y):
 
-    # Vectorized operation to compute gradient contributions for all pairs
-    Ydiff = Y[:, None, :] - Y[None, :, :]  # Shape: (n, n, num_dims)
-    grad = 4 * jnp.sum(pq_factor[:, :, None] * Ydiff * Y_dists[:, :, None], axis=1)
+    # Expand dimensions to support broadcasting for vectorized subtraction
+    Y_expanded = Y[:, None, :]  # Shape becomes (n, 1, num_dimensions)
 
-    return grad
+    # Compute pairwise differences using broadcasting, result has shape (n, n, num_dimensions)
+    pairwise_diff = Y_expanded - Y[None, :, :]
+
+    # Element-wise multiplication of R and Y_dists, then further element-wise multiplication by pairwise differences
+    # R and Y_dists are expanded to match the shape for broadcasting
+    grad_contributions = 4 * R[:, :, None] * pairwise_diff * Y_dists[:, :, None]
+
+    # Sum over the second axis (j index in the loop) to aggregate contributions to each point i
+    dY = jnp.sum(grad_contributions, axis=1)
+
+    return dY
 
 @jit
 def low_dim_affinities(Y):
@@ -119,4 +116,5 @@ def low_dim_affinities(Y):
 @jit
 def momentum_func(t):
     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
+
 
