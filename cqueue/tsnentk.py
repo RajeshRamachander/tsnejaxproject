@@ -55,33 +55,6 @@ def compute_pairwise_distances(dim_data):
     return D
 
 
-@jit
-def calculate_row_wise_entropy(asym_affinities):
-    """
-    Row-wise Shannon entropy of pairwise affinity matrix P
-
-    Parameters:
-    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Row-wise Shannon entropy of shape (n_samples,)
-    """
-    asym_affinities = jnp.clip(asym_affinities, EPSILON, None)
-    return -jnp.sum(asym_affinities * jnp.log(asym_affinities), axis=1)
-
-@jit
-def calculate_row_wise_perplexities(asym_affinities):
-    """
-    Compute perplexities of pairwise affinity matrix P
-
-    Parameters:
-    asym_affinities: pairwise affinity matrix of shape (n_samples, n_samples)
-
-    Returns:
-    jnp.ndarray: Row-wise perplexities of shape (n_samples,)
-    """
-    return 2 ** calculate_row_wise_entropy(asym_affinities)
-
 def preprocess_inputs(inputs):
     X = inputs.reshape(-1, 8, 8, 1)  # Reshape
     X = X / 255.0  # Normalize
@@ -470,18 +443,6 @@ def all_sym_affinities(data, perp, tol, attempts=250):
     return (P + P.T) / (2 * n_samples)
 
 
-
-@jit
-def low_dim_affinities(Y):
-    D = compute_pairwise_distances(Y)
-    Y_dists = jnp.power(1 + D , -1)
-    n = Y_dists.shape[0]
-    Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
-    return Y_dists_no_diag / jnp.sum(Y_dists_no_diag), Y_dists
-
-
-
-
 @jit
 def compute_grad(P, Q, Y_dists, Y):
     pq_factor = P-Q
@@ -490,8 +451,15 @@ def compute_grad(P, Q, Y_dists, Y):
     Ydiff = Y[:, None, :] - Y[None, :, :]  # Shape: (n, n, num_dims)
     grad = 4 * jnp.sum(pq_factor[:, :, None] * Ydiff * Y_dists[:, :, None], axis=1)
 
-
     return grad
+
+@jit
+def low_dim_affinities(Y):
+    D = compute_pairwise_distances(Y)
+    Y_dists = jnp.power(1 + D , -1)
+    n = Y_dists.shape[0]
+    Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
+    return Y_dists_no_diag / jnp.sum(Y_dists_no_diag), Y_dists
 
 
 @jit
