@@ -14,9 +14,9 @@ async def async_output_data_processor(data_processor, processed_result):
 async def main_async():
     server_communicator = ServerCommunicator()
     algorithms = [
-                'ntk', 
-                #   'jax_tsne', 
-                #   'sklearn_tsne'
+                # 'ntk', 
+                  'jax_tsne', 
+                  'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
@@ -24,7 +24,7 @@ async def main_async():
         data_processor = SimpleDataProcessor(algorithm, 
                                              size = 1000,
                                              perplexity=30, 
-                                             num_iterations=10000, 
+                                             num_iterations=1000, 
                                              learning_rate=100
                                              )
 
