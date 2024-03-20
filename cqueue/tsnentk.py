@@ -6,7 +6,14 @@ from neural_tangents import stax
 from jax import devices
 from jax import jit
 
-from tsne_common import pca_jax, momentum_func, all_sym_affinities, compute_grad, low_dim_affinities
+from tsne_common import (
+    all_sym_affinities,
+    pca_jax,
+    compute_pairwise_distances,
+    low_dim_affinities,
+    compute_grad,
+    momentum_func
+)
 
 
 def preprocess_inputs(inputs):
@@ -346,47 +353,37 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
                                       learning_rate=10, scaling_factor=1.,
                                       random_state=42,
                                       perp_tol=1e-6):
-
-    if high_dimensional_data.shape[1] > 30:
-        print(f'No of columns in the dataset: {high_dimensional_data.shape[1]}')
-        high_dimensional_data = pca_jax(high_dimensional_data)
-        print(f'After PCA the number of columns reduced to: {high_dimensional_data.shape[1]}')
-    else:
-        print('no reduction as number of colums: {high_dimensional_data.shape[1]}')
-
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
         jax.config.update('jax_platform_name', 'gpu')
         print('Using GPU')
+        high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
+        print('Data is on GPU')
+
+    if high_dimensional_data.shape[1] > 30:
+        high_dimensional_data = pca_jax(high_dimensional_data)
 
     data_mat = compute_ntk_matrix(high_dimensional_data)
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]),
-                           jax.device_put(data_mat, jax.devices('gpu')[0]),
-                           perplexity, perp_tol,
+    P = all_sym_affinities(data_mat, perplexity, perp_tol,
                            attempts=75) * scaling_factor
-
 
     size = (P.shape[0], num_dimensions)
     Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
     key = random.PRNGKey(random_state)
     initial_vals = random.normal(key, shape=size) * jnp.sqrt(1e-4)
 
-    Y = Y.at[0].set(initial_vals)
-    Y = Y.at[1].set(initial_vals)
+    Y = Y.at[0, :, :].set(initial_vals)
+    Y = Y.at[1, :, :].set(initial_vals)
     Y_m1 = initial_vals
     Y_m2 = initial_vals
 
-
     for i in trange(2, max_iterations + 2, disable=False):
+        Q, Y_dists = low_dim_affinities(Y_m1)
 
-        Q, Y_dist_mat = low_dim_affinities(Y_m1)
-
-
-        grad = compute_grad(P, Q, Y_dist_mat, Y_m1)
+        grad = compute_grad(P - Q, Y_dists, Y_m1)
 
         # Update embeddings.
         Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
-
 
         Y_m2, Y_m1 = Y_m1, Y_new
         Y = Y.at[i, :, :].set(Y_new)
