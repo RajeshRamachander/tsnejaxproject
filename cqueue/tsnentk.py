@@ -1,58 +1,12 @@
 from jax import random
 import jax
 import jax.numpy as jnp
-from jax import jit
-from tqdm import tqdm, trange
+from tqdm import trange
 from neural_tangents import stax
-from jax.experimental import host_callback
 from jax import devices
-from jax.nn import softmax
-from jax.numpy.linalg import svd
+from jax import jit
 
-
-
-EPSILON = 1e-12
-
-@jit
-def pca_jax(X, k=30):
-    """
-    Use PCA to project X to k dimensions using JAX.
-
-    Parameters:
-    X (jax.numpy.ndarray): The input data array.
-    k (int): The number of principal components to retain.
-
-    Returns:
-    jax.numpy.ndarray: The projected data in k dimensions.
-    """
-    # Center and scale the data
-    s = jnp.std(X, axis=0)
-    s = jnp.where(s == 0, 1, s)  # Avoid division by zero
-    X_centered_scaled = (X - jnp.mean(X, axis=0)) / s
-
-    # Compute SVD
-    U, S, Vh = svd(X_centered_scaled, full_matrices=False)
-
-    # Project data onto the first k principal components
-    X_pca = U[:, :k] * S[:k]
-
-    return X_pca
-
-@jit
-def compute_pairwise_distances(dim_data):
-    """
-    Compute pairwise distances between data points in an optimized manner.
-
-    Args:
-        high_dimensional_data (jnp.ndarray): High-dimensional input data.
-
-    Returns:
-        jnp.ndarray: Pairwise distances matrix.
-    """
-    # Efficient broadcasting for pairwise squared Euclidean distances
-    sum_X = jnp.sum(jnp.square(dim_data), axis=1)
-    D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X
-    return D
+from tsne_common import pca_jax, momentum_func, all_sym_affinities, compute_grad, low_dim_affinities
 
 
 def preprocess_inputs(inputs):
@@ -385,96 +339,119 @@ def get_kernel_by_deep_network2_conv_enhanced(input_shape):
 def compute_ntk_matrix(inputs):
 
     return get_kernel_by_deep_network2_adjusted(inputs)
-
-@jit
-def get_pij(d, scale, i):
-    """
-    Compute probabilities conditioned on point i from a row of distances
-    d and a Gaussian scale (scale = 2*sigma^2).
-    """
-
-    d_scaled = -d / scale
-    d_scaled -= jnp.max(d_scaled)
-    exp_D = jnp.exp(d_scaled)
-    exp_D = exp_D.at[i].set(0)
-    return exp_D / jnp.sum(exp_D)
-
-@jit
-def entropy_py(p):
-    """Calculates 2 ** H(p) of array p, where H(p) is the Shannon entropy."""
-    return 2 ** jnp.sum(-p * jnp.log2(p + 1e-10))
-@jit
-def all_sym_affinities(data, perp, tol, attempts=250):
-    ntk_mat = compute_ntk_matrix(data)  # Ensure this function is JAX-compatible
-    n_samples = data.shape[0]
-
-    # Correctly initialize P outside the loop
-    P = jnp.zeros(ntk_mat.shape)
-
-    def body_fun(i, P):
-        sigma_max = 1e4
-        sigma_min = 0.0
-        d = ntk_mat[i, :]
-
-        def cond_fun(val):
-            sigma_min, sigma_max, _ = val
-            return jnp.abs(sigma_max - sigma_min) > tol
-
-        def body_fun(val):
-            sigma_min, sigma_max, p_ij = val
-            sigma_mid = (sigma_min + sigma_max) / 2
-            scale = 2 * sigma_mid ** 2
-            p_ij = get_pij(d, scale, i)  # Ensure get_pij is JAX-compatible
-            current_perp = entropy_py(p_ij)  # Ensure entropy_py is JAX-compatible
-
-            update_cond = current_perp < perp
-            sigma_min = jax.lax.cond(update_cond, lambda: sigma_mid, lambda: sigma_min)
-            sigma_max = jax.lax.cond(update_cond, lambda: sigma_max, lambda: sigma_mid)
-            return sigma_min, sigma_max, p_ij
-
-        _, _, p_ij = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, jnp.zeros_like(d)))
-
-        # Update P correctly using the result from while_loop
-        P = P.at[i, :].set(p_ij)
-        return P
-
-    # Use lax.fori_loop to iterate over samples and update P
-    P = jax.lax.fori_loop(0, n_samples, body_fun, P)
-    return (P + P.T) / (2 * n_samples)
-
-
-@jit
-def compute_grad(P, Q, Y_dists, Y):
-    pq_factor = P-Q
-
-    # Vectorized operation to compute gradient contributions for all pairs
-    Ydiff = Y[:, None, :] - Y[None, :, :]  # Shape: (n, n, num_dims)
-    grad = 4 * jnp.sum(pq_factor[:, :, None] * Ydiff * Y_dists[:, :, None], axis=1)
-
-    return grad
-
-@jit
-def low_dim_affinities(Y):
-    D = compute_pairwise_distances(Y)
-    Y_dists = jnp.power(1 + D , -1)
-    n = Y_dists.shape[0]
-    Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
-    return Y_dists_no_diag / jnp.sum(Y_dists_no_diag), Y_dists
-
-
-@jit
-def momentum_func(t):
-    """Returns the optimization parameter.
-
-    Parameters:
-    t (int): The current iteration step.
-
-    Returns:
-    float: Represents the momentum term added to the gradient.
-    """
-    return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
-
-
+#
+# @jit
+# def pca_jax(X, k=30):
+#     """
+#     Use PCA to project X to k dimensions using JAX.
+#
+#     Parameters:
+#     X (jax.numpy.ndarray): The input data array.
+#     k (int): The number of principal components to retain.
+#
+#     Returns:
+#     jax.numpy.ndarray: The projected data in k dimensions.
+#     """
+#     # Center and scale the data
+#     s = jnp.std(X, axis=0)
+#     s = jnp.where(s == 0, 1, s)  # Avoid division by zero
+#     X_centered_scaled = (X - jnp.mean(X, axis=0)) / s
+#
+#     # Compute SVD
+#     U, S, Vh = svd(X_centered_scaled, full_matrices=False)
+#
+#     # Project data onto the first k principal components
+#     X_pca = U[:, :k] * S[:k]
+#
+#     return X_pca
+#
+# @jit
+# def compute_pairwise_distances(dim_data):
+#     # Efficient broadcasting for pairwise squared Euclidean distances
+#     sum_X = jnp.sum(jnp.square(dim_data), axis=1)
+#     D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X
+#     return D
+# @jit
+# def get_probabiility_at_ij(d, scale, i):
+#     d_scaled = -d / scale
+#     d_scaled -= jnp.max(d_scaled)
+#     exp_D = jnp.exp(d_scaled)
+#     exp_D = exp_D.at[i].set(0)
+#     return exp_D / jnp.sum(exp_D)
+#
+# @jit
+# def get_shannon_entropy(p):
+#     """Calculates 2 ** H(p) of array p, where H(p) is the Shannon entropy."""
+#     return 2 ** jnp.sum(-p * jnp.log2(p + 1e-10))
+#
+# def print_attempts(value):
+#   """Prints the value on the host machine."""
+#   print(f"attempts done: {value}")
+# @jit
+# def all_sym_affinities(data, data_mat, perp, tol, attempts=250):
+#
+#     n_samples = data.shape[0]
+#
+#     # Correctly initialize P outside the loop
+#     P = jnp.zeros(data_mat.shape)
+#
+#     def body_fun(i, P):
+#         sigma_max = 1e4
+#         sigma_min = 0.0
+#         d = data_mat[i, :]
+#
+#         def cond_fun(val):
+#             sigma_min, sigma_max, _, attempts_counter = val
+#             host_callback.call(print_attempts, attempts_counter)
+#             return (jnp.abs(sigma_max - sigma_min) > tol) & (attempts_counter < attempts)
+#
+#         def body_fun(val):
+#             sigma_min, sigma_max, p_ij, attempts_counter = val
+#             sigma_mid = (sigma_min + sigma_max) / 2
+#             scale = 2 * sigma_mid ** 2
+#             p_ij = get_probabiility_at_ij(d, scale, i)
+#             current_perp = get_shannon_entropy(p_ij)
+#
+#             update_cond = current_perp < perp
+#             sigma_min = jax.lax.cond(update_cond, lambda: sigma_mid, lambda: sigma_min)
+#             sigma_max = jax.lax.cond(update_cond, lambda: sigma_max, lambda: sigma_mid)
+#             return sigma_min, sigma_max, p_ij, attempts_counter + 1
+#
+#         _, _, p_ij, attempts_counter = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, jnp.zeros_like(d), 0))
+#         host_callback.call(print_attempts, attempts_counter)
+#         # Update P correctly using the result from while_loop
+#         P = P.at[i, :].set(p_ij)
+#         return P
+#
+#     # Use lax.fori_loop to iterate over samples and update P
+#     P = jax.lax.fori_loop(0, n_samples, body_fun, P)
+#     return (P + P.T) / (2 * n_samples)
+#
+#
+# @jit
+# def compute_grad(P, Q, Y_dists, Y):
+#     pq_factor = P-Q
+#
+#     # Vectorized operation to compute gradient contributions for all pairs
+#     Ydiff = Y[:, None, :] - Y[None, :, :]  # Shape: (n, n, num_dims)
+#     grad = 4 * jnp.sum(pq_factor[:, :, None] * Ydiff * Y_dists[:, :, None], axis=1)
+#
+#     return grad
+#
+# @jit
+# def low_dim_affinities(Y):
+#     D = compute_pairwise_distances(Y)
+#     Y_dists = jnp.power(1 + D , -1)
+#     n = Y_dists.shape[0]
+#     Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
+#     return Y_dists_no_diag / jnp.sum(Y_dists_no_diag), Y_dists
+#
+#
+# @jit
+# def momentum_func(t):
+#     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
+#
+#
 
 def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
                                       perplexity, max_iterations=100,
@@ -494,7 +471,10 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
         jax.config.update('jax_platform_name', 'gpu')
         print('Using GPU')
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol,
+    data_mat = compute_ntk_matrix(high_dimensional_data)
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]),
+                           jax.device_put(data_mat, jax.devices('gpu')[0]),
+                           perplexity, perp_tol,
                            attempts=75) * scaling_factor
 
 
