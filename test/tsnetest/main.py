@@ -16,7 +16,7 @@ async def main_async():
     algorithms = [
                 'ntk', 
                   'jax_tsne', 
-                #   'sklearn_tsne'
+                  'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
