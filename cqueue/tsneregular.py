@@ -41,7 +41,7 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
     data_mat = compute_pairwise_distances(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]))
 
     P = all_sym_affinities(data_mat, perplexity, perp_tol,
-                           attempts=75) * scaling_factor
+                           attempts=75, is_ntk=False) * scaling_factor
 
     size = (P.shape[0], num_dimensions)
     Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
@@ -75,3 +75,4 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
     return Y[-1]
 
 
+all_sym_affinities

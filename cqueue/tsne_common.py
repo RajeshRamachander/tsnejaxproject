@@ -2,7 +2,7 @@
 import jax
 import jax.numpy as jnp
 from jax import jit
-
+from jax.nn import softmax
 from jax.experimental import host_callback
 
 from jax.numpy.linalg import svd
@@ -19,7 +19,7 @@ def pca_jax(X, k=30):
     U, S, Vh = svd(X_centered_scaled, full_matrices=False)
 
     # Project data onto the first k principal components
-    X_pca = U[:, :k] * S[:k]
+    X_pca = X_centered_scaled @ Vh.T[:, :k]
 
     return X_pca
 
@@ -27,15 +27,37 @@ def pca_jax(X, k=30):
 def compute_pairwise_distances(dim_data):
     # Efficient broadcasting for pairwise squared Euclidean distances
     sum_X = jnp.sum(jnp.square(dim_data), axis=1)
-    D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X
+    D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X[None, :]
     return D
+
 @jit
-def get_probabiility_at_ij(d, scale, i):
+def get_eculidean_probability_at_ij(d, scale, i):
     d_scaled = -d / scale
     d_scaled -= jnp.max(d_scaled)
     exp_D = jnp.exp(d_scaled)
     exp_D = exp_D.at[i].set(0)
     return exp_D / jnp.sum(exp_D)
+
+@jit
+def get_ntk_probability_at_ij(d, sigma, i):
+    # No negation for NTK values, as larger values indicate stronger influence.
+    d_scaled = d / sigma
+    d_scaled = d_scaled.at[i].set(-jnp.inf)
+    probabilties = softmax(d_scaled)
+
+    return probabilties
+
+@jit
+def get_probability_at_ij(d, sigma, i, is_ntk):
+
+    def true_fun(_):
+        return get_ntk_probability_at_ij(d, sigma, i)
+
+    def false_fun(_):
+        return get_eculidean_probability_at_ij(d, sigma, i)
+
+    return jax.lax.cond(is_ntk, true_fun, false_fun, None)
+
 
 @jit
 def get_shannon_entropy(p):
@@ -47,7 +69,7 @@ def print_attempts(value):
   print(f"attempts done: {value}")
 
 @jit
-def all_sym_affinities(data_mat, perp, tol, attempts=250):
+def all_sym_affinities(data_mat, perp, tol,attempts=250,  is_ntk=True):
 
     n_samples = data_mat.shape[0]
 
@@ -68,7 +90,7 @@ def all_sym_affinities(data_mat, perp, tol, attempts=250):
             sigma_min, sigma_max, p_ij, attempts_counter = val
             sigma_mid = (sigma_min + sigma_max) / 2
             scale = 2 * sigma_mid ** 2
-            p_ij = get_probabiility_at_ij(d, scale, i)
+            p_ij = get_probability_at_ij(d, scale, i, is_ntk)
             current_perp = get_shannon_entropy(p_ij)
 
             update_cond = current_perp < perp
