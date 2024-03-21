@@ -14,6 +14,13 @@ from tsne_common import (
     momentum_func
 )
 
+def constant_learning_rate(t, eta_init, last_eta, c = 100):
+    """Constant learning rate."""
+    return c
+
+def step_based(t, eta_init, last_eta, d = 0.01, r = 50):
+    """Step-based learning rate with decay d and rate r."""
+    return eta_init*d**jnp.floor((1+t)/r)
 
 def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_dimensions,
                                       perplexity, max_iterations=100,
@@ -46,10 +53,17 @@ def compute_low_dimensional_embedding_regular_tsne(high_dimensional_data, num_di
     Y_m1 = initial_vals
     Y_m2 = initial_vals
 
+    last_learning_rate = learning_rate
+
     for i in trange(2, max_iterations + 2, disable=False):
+
+
         Q, Y_dists = low_dim_affinities(Y_m1)
 
         grad = compute_grad(P - Q, Y_dists, Y_m1)
+
+        learning_rate = step_based(i, learning_rate, last_learning_rate)
+        last_learning_rate = learning_rate
 
         # Update embeddings.
         Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
