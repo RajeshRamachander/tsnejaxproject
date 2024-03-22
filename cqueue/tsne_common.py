@@ -36,14 +36,16 @@ def get_eculidean_probability_at_ij(d, scale, i):
     d_scaled -= jnp.max(d_scaled)
     exp_D = jnp.exp(d_scaled)
     exp_D = exp_D.at[i].set(0)
-    return exp_D / jnp.sum(exp_D)
+    epsilon = 1e-8
+    return exp_D / (jnp.sum(exp_D)+epsilon)
 
 @jit
 def get_ntk_probability_at_ij(d, sigma, i):
     # No negation for NTK values, as larger values indicate stronger influence.
-    d_scaled = d / sigma
+    d_scaled = d / (sigma**2)
+    d_scaled -= d_scaled.min()  # Min normalization
     d_scaled = d_scaled.at[i].set(-jnp.inf)
-    probabilties = softmax(d_scaled)
+    probabilties = softmax(d_scaled/.5)
 
     return probabilties
 
@@ -83,7 +85,7 @@ def all_sym_affinities(data_mat, perp, tol,attempts=250,  is_ntk=True):
 
         def cond_fun(val):
             sigma_min, sigma_max, _, attempts_counter = val
-            host_callback.call(print_attempts, attempts_counter)
+            # host_callback.call(print_attempts, attempts_counter)
             return (jnp.abs(sigma_max - sigma_min) > tol) & (attempts_counter < attempts)
 
         def body_fun(val):
@@ -99,7 +101,7 @@ def all_sym_affinities(data_mat, perp, tol,attempts=250,  is_ntk=True):
             return sigma_min, sigma_max, p_ij, attempts_counter + 1
 
         _, _, p_ij, attempts_counter = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, jnp.zeros_like(d), 0))
-        host_callback.call(print_attempts, attempts_counter)
+        # host_callback.call(print_attempts, attempts_counter)
         # Update P correctly using the result from while_loop
         P = P.at[i, :].set(p_ij)
         return P
@@ -132,7 +134,11 @@ def low_dim_affinities(Y):
     Y_dists = jnp.power(1 + D , -1)
     n = Y_dists.shape[0]
     Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
-    return Y_dists_no_diag / jnp.sum(Y_dists_no_diag), Y_dists
+    # Ensure denominator is not too close to zero by adding a small constant epsilon
+    epsilon = 1e-8
+    normalized_Y_dists_no_diag = Y_dists_no_diag / (jnp.sum(Y_dists_no_diag) + epsilon)
+
+    return normalized_Y_dists_no_diag, Y_dists
 
 
 @jit
