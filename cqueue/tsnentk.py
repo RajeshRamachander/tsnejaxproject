@@ -357,7 +357,7 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
     if high_dimensional_data.shape[1] > 30:
         high_dimensional_data = pca_jax(high_dimensional_data)
 
-    data_mat = compute_pairwise_distances(high_dimensional_data)
+    data_mat = compute_ntk_matrix(high_dimensional_data)
 
     Y = run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
