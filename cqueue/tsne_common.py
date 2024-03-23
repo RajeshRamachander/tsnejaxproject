@@ -146,7 +146,19 @@ def low_dim_affinities(Y):
 def momentum_func(t):
     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
 
+def initialize_embedding(P, num_dimensions, max_iterations, random_state):
+    size = (P.shape[0], num_dimensions)
+    Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
+    key = random.PRNGKey(random_state)
+    initial_vals = random.normal(key, shape=size) * jnp.sqrt(1e-4)
 
+    # Set initial values for Y at t=0 and t=1
+    Y = Y.at[0, :, :].set(initial_vals)
+    Y = Y.at[1, :, :].set(initial_vals)
+    Y_m1 = initial_vals
+    Y_m2 = initial_vals
+
+    return Y, Y_m1, Y_m2
 def setup_device_for_jax():
     if any('gpu' in device.platform.lower() for device in jax.devices()):
         jax.config.update('jax_platform_name', 'gpu')
@@ -177,17 +189,7 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
     P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
 
 
-    # Initialize the embedding matrix
-    size = (P.shape[0], num_dimensions)
-    Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
-    key = random.PRNGKey(random_state)
-    initial_vals = random.normal(key, shape=size) * jnp.sqrt(1e-4)
-
-    # Set initial values for Y at t=0 and t=1
-    Y = Y.at[0, :, :].set(initial_vals)
-    Y = Y.at[1, :, :].set(initial_vals)
-    Y_m1 = initial_vals
-    Y_m2 = initial_vals
+    Y, Y_m1, Y_m2 = initialize_embedding(P, num_dimensions, max_iterations, random_state)
 
     # Iterative optimization
     for i in trange(2, max_iterations + 2, disable=False):
