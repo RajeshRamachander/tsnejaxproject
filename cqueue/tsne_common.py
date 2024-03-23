@@ -51,6 +51,8 @@ def get_ntk_probability_at_ij(d, sigma, i):
 @jit
 def get_probability_at_ij(d, sigma, i, is_ntk):
 
+    # def true_fun(_):
+    #     return get_ntk_probability_at_ij(d, sigma, i)
     def true_fun(_):
         return get_ntk_probability_at_ij(d, sigma, i)
 
@@ -129,6 +131,9 @@ def compute_grad(R, Y_dists, Y):
 
 @jit
 def compute_data_matrix(high_dimensional_data, is_ntk):
+
+    # def true_fun(_):
+    #     return compute_ntk_matrix(high_dimensional_data)
 
     def true_fun(_):
         return compute_ntk_matrix(high_dimensional_data)
