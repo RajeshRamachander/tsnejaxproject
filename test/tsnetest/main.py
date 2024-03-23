@@ -23,7 +23,7 @@ async def main_async():
         print(f"Starting t-SNE with {algorithm} algorithm.")
         data_processor = SimpleDataProcessor(algorithm, 
                                              size = 1000,
-                                             perplexity=30, 
+                                             perplexity=30,     
                                              num_iterations=1000, 
                                              learning_rate=100
                                              )
