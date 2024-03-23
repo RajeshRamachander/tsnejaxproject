@@ -170,10 +170,9 @@ def initialize_embedding(P, num_dimensions, max_iterations, random_state):
     return embedding_matrix_container, initial_vals
 
 
-def optimize_embeddings(max_iterations, Y_m1_initial, Y_m2_initial, learning_rate,  P, embedding_matrix_container):
+def optimize_embeddings(max_iterations, initial_vals, learning_rate,  P, embedding_matrix_container):
 
-    Y_m1 = Y_m1_initial
-    Y_m2 = Y_m2_initial
+    Y_m1 = Y_m2 = initial_vals
 
     for i in trange(2, max_iterations + 2, disable=False):
         # Compute low-dimensional affinities and distances
@@ -213,27 +212,7 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
 
 
     embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
-    Y_m2 = Y_m1 = initial_vals
 
-    embedding_matrix_container = optimize_embeddings(max_iterations, Y_m1, Y_m2, learning_rate, P, embedding_matrix_container)
-
-    # # Iterative optimization
-    # for i in trange(2, max_iterations + 2, disable=False):
-    #     # Compute low-dimensional affinities and distances
-    #     Q, Y_dists = low_dim_affinities(Y_m1)
-    #
-    #     # Compute the gradient
-    #     grad = compute_grad(P - Q, Y_dists, Y_m1)
-    #
-    #     # Update embeddings
-    #     Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
-    #
-    #     # Update historical embeddings for momentum calculation
-    #     Y_m2, Y_m1 = Y_m1, Y_new
-    #
-    #     # Record the new embeddings
-    #     embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
-
-    return embedding_matrix_container
+    return optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
 
 
