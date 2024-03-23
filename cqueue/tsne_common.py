@@ -146,6 +146,16 @@ def low_dim_affinities(Y):
 def momentum_func(t):
     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
 
+def setup_device_for_jax():
+    if any('gpu' in device.platform.lower() for device in jax.devices()):
+        jax.config.update('jax_platform_name', 'gpu')
+        print('Using GPU')
+        return True
+    return False
+
+def put_data_on_gpu(data):
+    return jax.device_put(data, jax.devices('gpu')[0])
+
 def initialize_embedding(P, num_dimensions, max_iterations, random_state):
     size = (P.shape[0], num_dimensions)
 
@@ -158,16 +168,30 @@ def initialize_embedding(P, num_dimensions, max_iterations, random_state):
     embedding_matrix_container = embedding_matrix_container.at[1, :, :].set(initial_vals)
 
     return embedding_matrix_container, initial_vals
-def setup_device_for_jax():
-    if any('gpu' in device.platform.lower() for device in jax.devices()):
-        jax.config.update('jax_platform_name', 'gpu')
-        print('Using GPU')
-        return True
-    return False
 
-def put_data_on_gpu(data):
-    return jax.device_put(data, jax.devices('gpu')[0])
 
+def optimize_embeddings(max_iterations, Y_m1_initial, Y_m2_initial, learning_rate,  P, embedding_matrix_container):
+
+    Y_m1 = Y_m1_initial
+    Y_m2 = Y_m2_initial
+
+    for i in trange(2, max_iterations + 2, disable=False):
+        # Compute low-dimensional affinities and distances
+        Q, Y_dists = low_dim_affinities(Y_m1)
+
+        # Compute the gradient
+        grad = compute_grad(P - Q, Y_dists, Y_m1)
+
+        # Update embeddings
+        Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
+
+        # Update historical embeddings for momentum calculation
+        Y_m2, Y_m1 = Y_m1, Y_new
+
+        # Record the new embeddings
+        embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
+
+    return embedding_matrix_container
 
 def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
@@ -188,25 +212,27 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
     P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
 
 
-    embedding_matrix_container, Y_m1 = initialize_embedding(P, num_dimensions, max_iterations, random_state)
-    Y_m2 = Y_m1
+    embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
+    Y_m2 = Y_m1 = initial_vals
 
-    # Iterative optimization
-    for i in trange(2, max_iterations + 2, disable=False):
-        # Compute low-dimensional affinities and distances
-        Q, Y_dists = low_dim_affinities(Y_m1)
+    embedding_matrix_container = optimize_embeddings(max_iterations, Y_m1, Y_m2, learning_rate, P, embedding_matrix_container)
 
-        # Compute the gradient
-        grad = compute_grad(P - Q, Y_dists, Y_m1)
-
-        # Update embeddings
-        Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
-
-        # Update historical embeddings for momentum calculation
-        Y_m2, Y_m1 = Y_m1, Y_new
-
-        # Record the new embeddings
-        embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
+    # # Iterative optimization
+    # for i in trange(2, max_iterations + 2, disable=False):
+    #     # Compute low-dimensional affinities and distances
+    #     Q, Y_dists = low_dim_affinities(Y_m1)
+    #
+    #     # Compute the gradient
+    #     grad = compute_grad(P - Q, Y_dists, Y_m1)
+    #
+    #     # Update embeddings
+    #     Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
+    #
+    #     # Update historical embeddings for momentum calculation
+    #     Y_m2, Y_m1 = Y_m1, Y_new
+    #
+    #     # Record the new embeddings
+    #     embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
 
     return embedding_matrix_container
 
