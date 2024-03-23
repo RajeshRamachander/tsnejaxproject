@@ -1,6 +1,5 @@
 import numpy as np
-from tsnentk import compute_low_dimensional_embedding_ntk
-from tsneregular import compute_low_dimensional_embedding_regular_tsne
+from tsnentk import compute_low_dimensional_embedding
 from sklearn.manifold import TSNE
 
 
@@ -41,24 +40,16 @@ def tsne(transmit_data):
     perplexity = transmit_data['perplexity']
     algorithm = transmit_data.get('algorithm', 'sklearn_tsne')  # Default to sklearn_tsne if not specified
 
-    # Initialize low_dim_embedding to None
     low_dim_embedding = None
 
-    if algorithm == 'ntk':
-        low_dim_embedding = compute_low_dimensional_embedding_ntk(
+    if algorithm in ['ntk', 'jax_tsne']:
+        low_dim_embedding = compute_low_dimensional_embedding(
             data,
             num_dimensions=num_dimensions,
             max_iterations=num_iterations,
             learning_rate=learning_rate,
             perplexity=perplexity,
-        )
-    elif algorithm == 'jax_tsne':
-        low_dim_embedding = compute_low_dimensional_embedding_regular_tsne(
-            data,
-            num_dimensions=num_dimensions,
-            max_iterations=num_iterations,
-            learning_rate=learning_rate,
-            perplexity=perplexity,
+            is_ntk=(algorithm == 'ntk')  # True for ntk, False for jax_tsne
         )
     elif algorithm == 'sklearn_tsne':
         tsne_model = TSNE(

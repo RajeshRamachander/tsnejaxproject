@@ -128,7 +128,22 @@ def compute_grad(R, Y_dists, Y):
     return dY
 
 @jit
-def low_dim_affinities(Y, is_ntk = False):
+def compute_data_matrix(high_dimensional_data, is_ntk):
+
+    def true_fun(_):
+        return compute_ntk_matrix(high_dimensional_data)
+
+    def false_fun(_):
+        return compute_pairwise_distances(high_dimensional_data)
+
+    return jax.lax.cond(is_ntk,
+                        true_fun,
+                        false_fun,
+                        None)
+
+@jit
+def low_dim_affinities(Y):
+
     D = compute_pairwise_distances(Y)
     Y_dists = jnp.power(1 + D , -1)
     n = Y_dists.shape[0]
@@ -168,9 +183,9 @@ def initialize_embedding(P, num_dimensions, max_iterations, random_state):
     return embedding_matrix_container, initial_vals
 
 @jit
-def update_step(i, state, is_ntk = False):
+def update_step(i, state):
     Y_m1, Y_m2, embedding_matrix_container, learning_rate, P = state
-    Q, Y_dists = low_dim_affinities(Y_m1, is_ntk)  # Assuming these can be JIT compiled or are already JAX ops
+    Q, Y_dists = low_dim_affinities(Y_m1)  # Assuming these can be JIT compiled or are already JAX ops
     grad = compute_grad(P - Q, Y_dists, Y_m1)  # Ditto
     Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
     embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
@@ -178,10 +193,11 @@ def update_step(i, state, is_ntk = False):
 
 @jit
 def optimize_embeddings(max_iterations, initial_vals, learning_rate, P,
-                            embedding_matrix_container, is_ntk = False):
+                            embedding_matrix_container):
     initial_state = (initial_vals, initial_vals, embedding_matrix_container, learning_rate, P)
     _, _, embedding_matrix_container, _, _ = jax.lax.fori_loop(2, max_iterations + 2, update_step, initial_state)
     return embedding_matrix_container
+
 
 def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
@@ -193,10 +209,12 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
         high_dimensional_data = put_data_on_gpu(high_dimensional_data)
         print('Data is on GPU')
 
+    print(f'NTK is: {is_ntk}')
+
     if high_dimensional_data.shape[1] > 30:
         high_dimensional_data = pca_jax(high_dimensional_data)
 
-    data_mat = compute_ntk_matrix(high_dimensional_data) if is_ntk else compute_pairwise_distances(high_dimensional_data)
+    data_mat = compute_data_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
     P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
@@ -204,6 +222,6 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
 
     embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
 
-    return optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container, is_ntk)
+    return optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
 
 
