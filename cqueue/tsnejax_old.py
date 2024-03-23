@@ -61,7 +61,7 @@ def fill_diagonal(arr, value):
 
 
 @jit
-def compute_probabilities_from_ntk(data):
+def compute_probabilities_from_ntk(data, sigmas):
     """
     Computes a probability matrix from input data using a scaled Neural Tangent Kernel (NTK).
 
@@ -103,7 +103,7 @@ def compute_probabilities_from_ntk(data):
 
 
     # Compute the NTK matrix
-    ntk_matrix = compute_ntk_matrix(data)
+    ntk_matrix = compute_ntk_matrix(data) / sigmas
     # Apply softmax for normalization
     P = jnp.exp(ntk_matrix) / jnp.sum(jnp.exp(ntk_matrix), axis=1, keepdims=True)
 
@@ -142,7 +142,7 @@ def compute_pairwise_probabilities(dist_mat, sigmas):
     return P
 
 @jit
-def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
+def pairwise_affinities(data, sigmas, dist_mat, is_ntk):
     """Calculates the pairwise affinities p_{j|i} using the given values of sigma
 
     Parameters:
@@ -159,35 +159,35 @@ def pairwise_affinities(data, sigmas, dist_mat, use_ntk):
     assert sigmas.shape[1] == 1, "Sigmas must be a column array"
 
     def true_fun(_):
-        # host_callback.id_print(use_ntk, what="use_ntk")
-        return compute_probabilities_from_ntk(data)
+        # host_callback.id_print(is_ntk, what="is_ntk")
+        return compute_probabilities_from_ntk(data, sigmas)
 
     def false_fun(_):
-        # host_callback.id_print(use_ntk, what="use_ntk")
+        # host_callback.id_print(is_ntk, what="is_ntk")
         return compute_pairwise_probabilities(dist_mat, sigmas)
 
-    return jax.lax.cond(use_ntk, true_fun, false_fun, None)
+    return jax.lax.cond(is_ntk, true_fun, false_fun, None)
 
 @jit
-def all_sym_affinities(data, perp, tol,  use_ntk, attempts=100):
+def all_sym_affinities(data, perp, tol,  is_ntk, attempts=100):
     dist_mat = compute_pairwise_distances(data)
     sigma_maxs = jnp.full(data.shape[0], 1e12)
     sigma_mins = jnp.full(data.shape[0], 1e-12)
     current_perps = jnp.full(data.shape[0], jnp.inf)
     sigmas = (sigma_mins + sigma_maxs) / 2
-    P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat, use_ntk)
+    P = pairwise_affinities(data, sigmas.reshape(-1, 1), dist_mat, is_ntk)
 
     def outer_while_condition(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk = args
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, is_ntk = args
         return jnp.logical_and(
             jnp.logical_not(jnp.allclose(current_perps, perp, atol=tol)),
             attempts > 0
         )
 
     def outer_while_body(args):
-        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk = args
+        current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, is_ntk = args
         sigmas = (sigma_mins + sigma_maxs) / 2
-        P = pairwise_affinities(data, sigmas.reshape(-1,1), dist_mat, use_ntk)
+        P = pairwise_affinities(data, sigmas.reshape(-1,1), dist_mat, is_ntk)
         current_perps = calculate_row_wise_perplexities(P)
         attempts -= 1
 
@@ -205,10 +205,10 @@ def all_sym_affinities(data, perp, tol,  use_ntk, attempts=100):
         inner_while_args = (0, sigmas, sigma_maxs, sigma_mins, current_perps, perp)
         (_, _, sigma_maxs, sigma_mins, _, _ ) = jax.lax.while_loop(inner_while_condition, inner_while_body, inner_while_args)
 
-        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk
+        return current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, is_ntk
 
-    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, use_ntk)
-    (_, _, _, _, _, _, P, use_ntk) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
+    outer_while_args = (current_perps, perp, tol, attempts, sigma_maxs, sigma_mins, P, is_ntk)
+    (_, _, _, _, _, _, P, is_ntk) = jax.lax.while_loop(outer_while_condition, outer_while_body, outer_while_args)
 
     P = (P + P.T) / (2 * data.shape[0])
 
@@ -265,11 +265,11 @@ def momentum_func(t):
     return jnp.where(t < 250, 0.5, 0.8)
 
 
-def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
-                                      target_perplexity, max_iterations=100,
+def compute_low_dimensional_embedding_old(high_dimensional_data, num_dimensions,
+                                      perplexity, max_iterations=100,
                                       learning_rate=100, scaling_factor=4.,
                                       pbar=False, random_state=42,
-                                      perp_tol=1e-8, use_ntk = True):
+                                      perp_tol=1e-8, is_ntk = True):
 
     all_devices = devices()
     if any('gpu' in dev.platform.lower() for dev in all_devices):
@@ -284,7 +284,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     else:
         rand = random_state
 
-    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), target_perplexity, perp_tol, use_ntk) * scaling_factor
+    P = all_sym_affinities(jax.device_put(high_dimensional_data, jax.devices('gpu')[0]), perplexity, perp_tol, is_ntk) * scaling_factor
     P = jnp.clip(P, EPSILON, None)
 
     init_mean = jnp.zeros(num_dimensions, dtype=jnp.float32)
