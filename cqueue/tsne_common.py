@@ -1,11 +1,13 @@
 
 import jax
-import jax.numpy as jnp
 from jax import jit
 from jax.nn import softmax
 from jax.experimental import host_callback
 
 from jax.numpy.linalg import svd
+from tqdm import trange
+import jax.numpy as jnp
+from jax import random
 
 
 @jit
@@ -145,4 +147,43 @@ def low_dim_affinities(Y):
 def momentum_func(t):
     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
 
+
+
+def run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
+                       num_dimensions, max_iterations,
+                       learning_rate, random_state,
+                       is_ntk = True):
+    # Compute pairwise affinities in high-dimensional space, scaled by a factor
+    P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
+
+    # Initialize the embedding matrix
+    size = (P.shape[0], num_dimensions)
+    Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
+    key = random.PRNGKey(random_state)
+    initial_vals = random.normal(key, shape=size) * jnp.sqrt(1e-4)
+
+    # Set initial values for Y at t=0 and t=1
+    Y = Y.at[0, :, :].set(initial_vals)
+    Y = Y.at[1, :, :].set(initial_vals)
+    Y_m1 = initial_vals
+    Y_m2 = initial_vals
+
+    # Iterative optimization
+    for i in trange(2, max_iterations + 2, disable=False):
+        # Compute low-dimensional affinities and distances
+        Q, Y_dists = low_dim_affinities(Y_m1)
+
+        # Compute the gradient
+        grad = compute_grad(P - Q, Y_dists, Y_m1)
+
+        # Update embeddings
+        Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
+
+        # Update historical embeddings for momentum calculation
+        Y_m2, Y_m1 = Y_m1, Y_new
+
+        # Record the new embeddings
+        Y = Y.at[i, :, :].set(Y_new)
+
+    return Y
 

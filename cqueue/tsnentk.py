@@ -1,20 +1,14 @@
 from jax import random
 import jax
 import jax.numpy as jnp
-from tqdm import trange
 from neural_tangents import stax
 from jax import devices
 from jax import jit
 
 from tsne_common import (
-    all_sym_affinities,
     pca_jax,
-    compute_pairwise_distances,
-    low_dim_affinities,
-    compute_grad,
-    momentum_func
+    run_tsne_algorithm
 )
-
 
 def preprocess_inputs(inputs):
     X = inputs.reshape(-1, 8, 8, 1)  # Reshape
@@ -363,30 +357,11 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
     if high_dimensional_data.shape[1] > 30:
         high_dimensional_data = pca_jax(high_dimensional_data)
 
-    data_mat = compute_ntk_matrix(high_dimensional_data)
-    P = all_sym_affinities(data_mat, perplexity, perp_tol,
-                           attempts=75) * scaling_factor
+    data_mat = compute_pairwise_distances(high_dimensional_data)
 
-    size = (P.shape[0], num_dimensions)
-    Y = jnp.zeros(shape=(max_iterations + 2, size[0], num_dimensions))
-    key = random.PRNGKey(random_state)
-    initial_vals = random.normal(key, shape=size) * jnp.sqrt(1e-4)
-
-    Y = Y.at[0, :, :].set(initial_vals)
-    Y = Y.at[1, :, :].set(initial_vals)
-    Y_m1 = initial_vals
-    Y_m2 = initial_vals
-
-    for i in trange(2, max_iterations + 2, disable=False):
-        Q, Y_dists = low_dim_affinities(Y_m1)
-
-        grad = compute_grad(P - Q, Y_dists, Y_m1)
-
-        # Update embeddings.
-        Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
-
-        Y_m2, Y_m1 = Y_m1, Y_new
-        Y = Y.at[i, :, :].set(Y_new)
+    Y = run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
+                       num_dimensions, max_iterations,
+                       learning_rate, random_state)
 
     print(Y.shape)
     return Y[-1]
