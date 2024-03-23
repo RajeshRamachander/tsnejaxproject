@@ -1,5 +1,5 @@
 import numpy as np
-from tsnentk import compute_low_dimensional_embedding
+from tsne_common import compute_low_dimensional_embedding
 from sklearn.manifold import TSNE
 
 

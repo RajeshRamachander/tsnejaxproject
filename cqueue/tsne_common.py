@@ -199,11 +199,12 @@ def optimize_embeddings(max_iterations, initial_vals, learning_rate, P,
     return embedding_matrix_container
 
 
-def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
-                       num_dimensions, max_iterations,
-                       learning_rate, random_state,
-                       is_ntk = False):
-
+def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
+                                      perplexity, max_iterations=100,
+                                      learning_rate=10, scaling_factor=1.,
+                                      random_state=42,
+                                      perp_tol=1e-6,
+                                       is_ntk = False):
     # Setup device for JAX computations and move data if GPU is used
     if setup_device_for_jax():
         high_dimensional_data = put_data_on_gpu(high_dimensional_data)
@@ -217,11 +218,12 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
     data_mat = compute_data_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
-    P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
-
+    P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk=is_ntk) * scaling_factor
 
     embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
 
-    return optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
+    Y = optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
 
+    print(Y.shape)
 
+    return Y[-1]
