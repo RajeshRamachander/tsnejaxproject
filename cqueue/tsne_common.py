@@ -2,12 +2,10 @@
 import jax
 from jax import jit
 from jax.nn import softmax
-from jax.experimental import host_callback
 from jax.numpy.linalg import svd
-from tqdm import trange
 import jax.numpy as jnp
 from jax import random
-
+from ntk import compute_ntk_matrix
 
 @jit
 def pca_jax(X, k=30):
@@ -188,7 +186,7 @@ def optimize_embeddings(max_iterations, initial_vals, learning_rate, P,
 def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
                        learning_rate, random_state,
-                       is_ntk = False, matrix_function = None):
+                       is_ntk = False):
 
     # Setup device for JAX computations and move data if GPU is used
     if setup_device_for_jax():
@@ -198,7 +196,7 @@ def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_fact
     if high_dimensional_data.shape[1] > 30:
         high_dimensional_data = pca_jax(high_dimensional_data)
 
-    data_mat = matrix_function(high_dimensional_data) if is_ntk else compute_pairwise_distances(high_dimensional_data)
+    data_mat = compute_ntk_matrix(high_dimensional_data) if is_ntk else compute_pairwise_distances(high_dimensional_data)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
     P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
