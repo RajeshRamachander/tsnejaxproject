@@ -3,7 +3,6 @@ import jax
 from jax import jit
 from jax.nn import softmax
 from jax.experimental import host_callback
-
 from jax.numpy.linalg import svd
 from tqdm import trange
 import jax.numpy as jnp
@@ -148,13 +147,35 @@ def momentum_func(t):
     return jax.lax.cond(t < 250, lambda _: 0.5, lambda _: 0.8, operand=None)
 
 
+def setup_device_for_jax():
+    if any('gpu' in device.platform.lower() for device in jax.devices()):
+        jax.config.update('jax_platform_name', 'gpu')
+        print('Using GPU')
+        return True
+    return False
 
-def run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
+def put_data_on_gpu(data):
+    return jax.device_put(data, jax.devices('gpu')[0])
+
+
+def run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
                        learning_rate, random_state,
-                       is_ntk = True):
+                       is_ntk = False, matrix_function = None):
+
+    # Setup device for JAX computations and move data if GPU is used
+    if setup_device_for_jax():
+        high_dimensional_data = put_data_on_gpu(high_dimensional_data)
+        print('Data is on GPU')
+
+    if high_dimensional_data.shape[1] > 30:
+        high_dimensional_data = pca_jax(high_dimensional_data)
+
+    data_mat = matrix_function(high_dimensional_data) if is_ntk else compute_pairwise_distances(high_dimensional_data)
+
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
     P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk = is_ntk) * scaling_factor
+
 
     # Initialize the embedding matrix
     size = (P.shape[0], num_dimensions)
@@ -186,4 +207,5 @@ def run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
         Y = Y.at[i, :, :].set(Y_new)
 
     return Y
+
 

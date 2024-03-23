@@ -1,14 +1,11 @@
 from jax import random
-import jax
 import jax.numpy as jnp
 from neural_tangents import stax
-from jax import devices
+
 from jax import jit
 
-from tsne_common import (
-    pca_jax,
-    run_tsne_algorithm
-)
+from tsne_common import run_tsne_algorithm
+
 
 def preprocess_inputs(inputs):
     X = inputs.reshape(-1, 8, 8, 1)  # Reshape
@@ -347,21 +344,11 @@ def compute_low_dimensional_embedding_ntk(high_dimensional_data, num_dimensions,
                                       learning_rate=10, scaling_factor=1.,
                                       random_state=42,
                                       perp_tol=1e-6):
-    all_devices = devices()
-    if any('gpu' in dev.platform.lower() for dev in all_devices):
-        jax.config.update('jax_platform_name', 'gpu')
-        print('Using GPU')
-        high_dimensional_data = jax.device_put(high_dimensional_data, jax.devices('gpu')[0])
-        print('Data is on GPU')
 
-    if high_dimensional_data.shape[1] > 30:
-        high_dimensional_data = pca_jax(high_dimensional_data)
 
-    data_mat = compute_ntk_matrix(high_dimensional_data)
-
-    Y = run_tsne_algorithm(data_mat, perplexity, perp_tol, scaling_factor,
+    Y = run_tsne_algorithm(high_dimensional_data, perplexity, perp_tol, scaling_factor,
                        num_dimensions, max_iterations,
-                       learning_rate, random_state)
+                       learning_rate, random_state, is_ntk=True, matrix_function=compute_ntk_matrix)
 
     print(Y.shape)
     return Y[-1]
