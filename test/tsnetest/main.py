@@ -22,7 +22,7 @@ async def main_async():
     for algorithm in algorithms[::-1]:
         print(f"Starting t-SNE with {algorithm} algorithm.")
         data_processor = SimpleDataProcessor(algorithm, 
-                                             size = 1000,
+                                             size = 1500,
                                              perplexity=30,     
                                              num_iterations=1000, 
                                              learning_rate=100

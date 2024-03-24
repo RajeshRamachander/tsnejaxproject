@@ -199,6 +199,30 @@ def optimize_embeddings(max_iterations, initial_vals, learning_rate, P,
     return embedding_matrix_container
 
 
+def run_embedding_process(P, num_dimensions, max_iterations, learning_rate, random_state):
+    # Initialize the embedding matrix and initial values
+    embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
+
+    # Optimize the embeddings
+    Y = optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
+
+    return Y
+
+def apply_scaling(affinity_matrix, scaling_factor):
+    # Apply the scaling factor to the affinity matrix
+    return affinity_matrix * scaling_factor
+
+
+def calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, attempts=75, is_ntk=False):
+    # Calculate the all symmetrical affinities
+    affinity_matrix = all_sym_affinities(data_mat, perplexity, perp_tol, attempts, is_ntk)
+
+    # Apply the scaling factor
+    P = apply_scaling(affinity_matrix, scaling_factor)
+
+    return P
+
+
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       perplexity, max_iterations=100,
                                       learning_rate=10, scaling_factor=1.,
@@ -218,11 +242,9 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     data_mat = compute_data_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
-    P = all_sym_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk=is_ntk) * scaling_factor
+    P = calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, attempts = 75, is_ntk = is_ntk)
 
-    embedding_matrix_container, initial_vals = initialize_embedding(P, num_dimensions, max_iterations, random_state)
-
-    Y = optimize_embeddings(max_iterations, initial_vals, learning_rate, P, embedding_matrix_container)
+    Y = run_embedding_process(P, num_dimensions, max_iterations, learning_rate, random_state)
 
     print(Y.shape)
 
