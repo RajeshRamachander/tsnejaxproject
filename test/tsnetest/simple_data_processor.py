@@ -117,7 +117,8 @@ class SimpleDataProcessor:
                 print(f"Error parsing string to array: {e}")
             return
 
-            # Create a heatmap using Matplotlib's imshow function
+        cmap = 'viridis'
+        figsize = (10, 8)
         plt.figure(figsize=figsize)
         plt.imshow(matrix, cmap=cmap, aspect='auto')
         plt.colorbar()  # Show color scale
