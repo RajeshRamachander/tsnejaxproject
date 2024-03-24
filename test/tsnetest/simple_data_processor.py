@@ -117,12 +117,22 @@ class SimpleDataProcessor:
                 print(f"Error parsing string to array: {e}")
             return
 
-            
+            # Create a heatmap using Matplotlib's imshow function
+        plt.figure(figsize=figsize)
+        plt.imshow(matrix, cmap=cmap, aspect='auto')
+        plt.colorbar()  # Show color scale
 
-        sns.heatmap(matrix, cmap='viridis')
         plt.title('Distance Matrix Heatmap')
         plt.xlabel('Data Point Index')
         plt.ylabel('Data Point Index')
+
+        # Add text indicating the type of matrix or algorithm used
+        plt.text(x=0.5, y=-0.1, s=f"Matrix Type: {self.algorithm}", fontsize=12, ha='center', va='bottom', transform=plt.gca().transAxes)
+
+        # Customizing the ticks (optional, depending on your dataset)
+        plt.xticks(np.arange(matrix.shape[1]))  # Adjust as necessary
+        plt.yticks(np.arange(matrix.shape[0]))  # Adjust as necessary
+
         plt.show()
 
 
