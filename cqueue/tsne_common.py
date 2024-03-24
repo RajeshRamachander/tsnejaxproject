@@ -130,6 +130,9 @@ def compute_grad(R, Y_dists, Y):
 @jit
 def compute_data_matrix(high_dimensional_data, is_ntk):
 
+    high_dimensional_data = pca_jax(high_dimensional_data) \
+        if high_dimensional_data.shape[1] > 30 else high_dimensional_data
+
     def true_fun(_):
         return compute_ntk_matrix(high_dimensional_data)
 
@@ -235,9 +238,6 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         print('Data is on GPU')
 
     print(f'NTK is: {is_ntk}')
-
-    if high_dimensional_data.shape[1] > 30:
-        high_dimensional_data = pca_jax(high_dimensional_data)
 
     data_mat = compute_data_matrix(high_dimensional_data, is_ntk)
 
