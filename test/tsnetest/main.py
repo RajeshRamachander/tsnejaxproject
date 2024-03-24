@@ -7,16 +7,18 @@ from simple_data_processor import SimpleDataProcessor
 # Apply the nest_asyncio patch
 nest_asyncio.apply()
 
+
 async def async_output_data_processor(data_processor, processed_result):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, data_processor.output_data_processor, processed_result)
+
 
 async def main_async():
     server_communicator = ServerCommunicator()
     algorithms = [
                 'ntk', 
-                  'jax_tsne', 
-                  'sklearn_tsne'
+                #   'jax_tsne', 
+                #   'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
@@ -28,7 +30,7 @@ async def main_async():
                                              learning_rate=100
                                              )
 
-        main_data = data_processor.prepare_data()
+        main_data = data_processor.prepare_data_matrix()
         
         response = server_communicator.start_task(main_data)
 

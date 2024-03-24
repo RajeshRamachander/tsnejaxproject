@@ -1,7 +1,7 @@
-from data_processor import DataProcessor
 from sklearn.datasets import load_digits
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib import rcParams
 import ast
 import time
@@ -13,9 +13,11 @@ class SimpleDataProcessor:
         self.perplexity = perplexity
         self.num_iterations = num_iterations
         self.learning_rate = learning_rate
-        self.classes = None  # This should be set based on your dataset
+        self.classes = None  
+        self.preparation_method = None 
 
-    def prepare_data(self):
+    def prepare_data_full(self):
+        self.preparation_method = 'full'
         try:
             digits, digit_class = load_digits(return_X_y=True)
             rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
@@ -24,6 +26,7 @@ class SimpleDataProcessor:
             self.classes = digit_class[rand_idx]
 
             transmit_data = {
+                'packer' : 'full',
                 'data': data.tolist(),
                 'num_dimensions': 2,
                 'perplexity': self.perplexity,
@@ -35,8 +38,39 @@ class SimpleDataProcessor:
         except Exception as e:
             print(f"Error preparing data: {e}")
             return None
+    
+    def prepare_data_matrix(self):
+        self.preparation_method = 'matrix' 
+        try:
+            digits, digit_class = load_digits(return_X_y=True)
+            rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
+            print(digits.shape[1])
+            data = digits[rand_idx, :]
+            self.classes = digit_class[rand_idx]
+
+            transmit_data = {
+                'packer' : 'matrix',
+                'data': data.tolist(),
+                'algorithm': self.algorithm,
+            }
+            return transmit_data
+        except Exception as e:
+            print(f"Error preparing data: {e}")
+            return None
 
     def output_data_processor(self, processed_result):
+    
+        if self.preparation_method == 'full':
+            self.output_data_processor_full(processed_result)
+        elif self.preparation_method == 'matrix':
+            self.output_data_processor_matrix(processed_result)
+        else:
+            print(f"No output processor defined for preparation method '{self.preparation_method}'.")
+
+
+    def output_data_processor_matrix(self, processed_result):
+
+        print("Processing data prepared with the full method.")
         
         if processed_result is None:
             print("No result to process.")
@@ -44,7 +78,6 @@ class SimpleDataProcessor:
         else:
             print(f'Result: {processed_result}')
 
-        # Continue with the rest of the method as before
         if isinstance(processed_result, list):
             low_dim = np.array(processed_result)
         else:
@@ -59,6 +92,37 @@ class SimpleDataProcessor:
         print(f"Using {self.algorithm} for t-SNE.")
         scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
         plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+        plt.show()
+
+    def output_data_processor_matrix(self, processed_result):
+    
+        print("Processing data prepared with the matrix method.")
+        
+        if processed_result is None:
+            print("No result to process.")
+            return
+        else:
+            print(f'Result: {processed_result}')
+
+    
+        if isinstance(processed_result, list):
+            matrix = np.array(processed_result)
+        else:
+            # If it's a string, perform the original processing
+            result_received = processed_result.replace("Result received: ", "")
+            try:
+                matrix = ast.literal_eval(result_received)
+                matrix = np.array(matrix)
+            except ValueError as e:
+                print(f"Error parsing string to array: {e}")
+            return
+
+            
+
+        sns.heatmap(matrix, cmap='viridis')
+        plt.title('Distance Matrix Heatmap')
+        plt.xlabel('Data Point Index')
+        plt.ylabel('Data Point Index')
         plt.show()
 
 
