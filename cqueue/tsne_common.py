@@ -225,13 +225,8 @@ def calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, 
 
     return P
 
+def process_data_and_compute_matrix(high_dimensional_data, is_ntk):
 
-def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
-                                      perplexity, max_iterations=100,
-                                      learning_rate=10, scaling_factor=1.,
-                                      random_state=42,
-                                      perp_tol=1e-6,
-                                       is_ntk = False):
     # Setup device for JAX computations and move data if GPU is used
     if setup_device_for_jax():
         high_dimensional_data = put_data_on_gpu(high_dimensional_data)
@@ -239,7 +234,19 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
 
     print(f'NTK is: {is_ntk}')
 
+    # Compute the data matrix based on the processed high-dimensional data and is_ntk flag
     data_mat = compute_data_matrix(high_dimensional_data, is_ntk)
+
+    return data_mat
+
+def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
+                                      perplexity, max_iterations=100,
+                                      learning_rate=10, scaling_factor=1.,
+                                      random_state=42,
+                                      perp_tol=1e-6,
+                                       is_ntk = False):
+ 
+    data_mat = process_data_and_compute_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
     P = calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, attempts = 75, is_ntk = is_ntk)
