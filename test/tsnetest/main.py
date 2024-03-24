@@ -30,7 +30,7 @@ async def main_async():
                                              learning_rate=100
                                              )
 
-        main_data = data_processor.prepare_data_matrix()
+        main_data = data_processor.prepare_data_full()
         
         response = server_communicator.start_task(main_data)
 

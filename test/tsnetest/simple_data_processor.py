@@ -68,7 +68,7 @@ class SimpleDataProcessor:
             print(f"No output processor defined for preparation method '{self.preparation_method}'.")
 
 
-    def output_data_processor_matrix(self, processed_result):
+    def output_data_processor_full(self, processed_result):
 
         print("Processing data prepared with the full method.")
         
@@ -92,6 +92,10 @@ class SimpleDataProcessor:
         print(f"Using {self.algorithm} for t-SNE.")
         scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
         plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+        # Add text indicating the type of matrix or algorithm used
+        plt.text(x=0.5, y=-0.1, s=f"Algo Type: {self.algorithm}", fontsize=12, ha='center', va='bottom',
+                 transform=plt.gca().transAxes)
+
         plt.show()
 
     def output_data_processor_matrix(self, processed_result):
