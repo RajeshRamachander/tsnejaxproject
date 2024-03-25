@@ -7,27 +7,35 @@ import ast
 import time
 
 class SimpleDataProcessor:
-    def __init__(self, algorithm, size=1000, perplexity=30, num_iterations=10000, learning_rate=100):
+    def __init__(self, algorithm, size=None, perplexity=30, num_iterations=10000, learning_rate=100):
         self.algorithm = algorithm
         self.size = size
         self.perplexity = perplexity
         self.num_iterations = num_iterations
         self.learning_rate = learning_rate
-        self.classes = None  
         self.preparation_method = None 
+        try:
+            digits, digit_class = load_digits(return_X_y=True)
+            if self.size is None or self.size > digits.shape[0]:
+                # Use the full dataset if size is None or larger than the dataset
+                self.data = digits
+                self.classes = digit_class
+            else:
+                # Otherwise, randomly select a subset of the data
+                rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
+                self.data = digits[rand_idx, :]
+                self.classes = digit_class[rand_idx]
+            print(f"Data prepared with shape: {data.shape}")
+        except Exception as e:
+            print(f"Error preparing data: {e}")
+
 
     def prepare_data_full(self):
         self.preparation_method = 'full'
         try:
-            digits, digit_class = load_digits(return_X_y=True)
-            rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
-            print(digits.shape[1])
-            data = digits[rand_idx, :]
-            self.classes = digit_class[rand_idx]
-
             transmit_data = {
                 'packer' : 'full',
-                'data': data.tolist(),
+                'data': self.data.tolist(),
                 'num_dimensions': 2,
                 'perplexity': self.perplexity,
                 'num_iterations': self.num_iterations,
@@ -42,15 +50,9 @@ class SimpleDataProcessor:
     def prepare_data_matrix(self):
         self.preparation_method = 'matrix' 
         try:
-            digits, digit_class = load_digits(return_X_y=True)
-            rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
-            print(digits.shape[1])
-            data = digits[rand_idx, :]
-            self.classes = digit_class[rand_idx]
-
             transmit_data = {
                 'packer' : 'matrix',
-                'data': data.tolist(),
+                'data': self.data.tolist(),
                 'algorithm': self.algorithm,
             }
             return transmit_data

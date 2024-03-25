@@ -132,7 +132,7 @@ def get_kernel_by_deep_network2(input):
 
     return kernel_fn(input, input, 'ntk')
 
-def get_kernel_by_deep_network2_adjusted(input):
+def get_kernel_by_deep_network2_adjusted(input1, input2):
 
     # Define an adjusted neural network architecture
     init_fn, apply_fn, kernel_fn = stax.serial(
@@ -150,7 +150,7 @@ def get_kernel_by_deep_network2_adjusted(input):
         stax.Dense(10)
     )
 
-    return kernel_fn(input, input, 'ntk')
+    return kernel_fn(input1, input2, 'ntk')
 
 
 def get_kernel_by_deep_network2_conv(input_shape):
@@ -330,6 +330,6 @@ def get_kernel_by_deep_network2_conv_enhanced(input_shape):
 
 
 @jit
-def compute_ntk_matrix(inputs):
+def compute_ntk_matrix(input1, input2):
 
-    return get_kernel_by_deep_network2_adjusted(inputs)
+    return get_kernel_by_deep_network2_adjusted(input1, input2)
