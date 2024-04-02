@@ -5,6 +5,7 @@ from matplotlib import rcParams
 import ast
 import time
 import pandas as pd
+from datetime import datetime
 
 class SimpleDataProcessor:
     def __init__(self, algorithm, preparation_method = None,
@@ -17,6 +18,7 @@ class SimpleDataProcessor:
         self.preparation_method = None
         self.data = None
         self.classes = None
+        self.filename_to_save_output = None
         try:
             digits, digit_class = load_digits(return_X_y=True)
             if self.size is None or self.size > digits.shape[0]:
@@ -38,6 +40,7 @@ class SimpleDataProcessor:
             self.preparation_method = 'full'
         elif preparation_method == 'matrix':
             self.preparation_method = 'matrix'
+            self.filename_to_save_output = self.generate_file_name_with_timestamp()
         else:
             self.preparation_method = preparation_method
             print(f"Unknown preparation method: {self.preparation_method}")
@@ -154,8 +157,11 @@ class SimpleDataProcessor:
         plt.show()
 
         # save data to csv file
-        pd.DataFrame(matrix).to_csv('matrix.csv', index=False)
+        pd.DataFrame(matrix).to_csv(self.filename_to_save_output, index=False)
 
+    def generate_file_name_with_timestamp(self):
+        timestamp = datetime.now()
+        return f'Load_digits_matrix_{self.size}_{timestamp.strftime("%Y%m%d-%H-%M-%S")}.csv'
 
     def wait_for_completion(self, task_id, server_communicator):
         """Polls the server for the status of the task until it is completed.
