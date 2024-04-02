@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import ast
 import time
+import pandas as pd
 
 class SimpleDataProcessor:
     def __init__(self, algorithm, preparation_method = None,
@@ -108,6 +109,7 @@ class SimpleDataProcessor:
 
         plt.show()
 
+
     def output_data_processor_matrix(self, processed_result):
     
 
@@ -150,6 +152,9 @@ class SimpleDataProcessor:
         plt.yticks(np.arange(matrix.shape[0]))  # Adjust as necessary
 
         plt.show()
+
+        # save data to csv file
+        pd.DataFrame(matrix).to_csv('matrix.csv', index=False)
 
 
     def wait_for_completion(self, task_id, server_communicator):
