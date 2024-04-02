@@ -7,7 +7,8 @@ import ast
 import time
 
 class SimpleDataProcessor:
-    def __init__(self, algorithm, size=None, perplexity=30, num_iterations=10000, learning_rate=100):
+    def __init__(self, algorithm, preparation_method = None,
+                 size=None, perplexity=30, num_iterations=10000, learning_rate=100):
         self.algorithm = algorithm
         self.size = size
         self.perplexity = perplexity
@@ -33,33 +34,36 @@ class SimpleDataProcessor:
         except Exception as e:
             print(f"Error preparing data: {e}")
 
+        if preparation_method is None or preparation_method =='full':
+            self.preparation_method = 'full'
+        elif preparation_method == 'matrix':
+            self.preparation_method = 'matrix'
+        else:
+            self.preparation_method = preparation_method
+            print(f"Unknown preparation method: {self.preparation_method}")
+            raise ValueError(f"Unknown preparation method: {self.preparation_method}")
 
-    def prepare_data_full(self):
-        self.preparation_method = 'full'
+
+    def prepare_data(self):
         try:
-            transmit_data = {
-                'packer' : 'full',
-                'data': self.data.tolist(),
-                'num_dimensions': 2,
-                'perplexity': self.perplexity,
-                'num_iterations': self.num_iterations,
-                'learning_rate': self.learning_rate,
-                'algorithm': self.algorithm,
-            }
-            return transmit_data
-        except Exception as e:
-            print(f"Error preparing data: {e}")
-            return None
-    
-    def prepare_data_matrix(self):
-        self.preparation_method = 'matrix' 
-        try:
-            transmit_data = {
-                'packer' : 'matrix',
-                'data': self.data.tolist(),
-                'algorithm': self.algorithm,
-            }
-            return transmit_data
+            if self.preparation_method == 'full':
+                transmit_data = {
+                    'packer' : 'full',
+                    'data': self.data.tolist(),
+                    'num_dimensions': 2,
+                    'perplexity': self.perplexity,
+                    'num_iterations': self.num_iterations,
+                    'learning_rate': self.learning_rate,
+                    'algorithm': self.algorithm,
+                }
+                return transmit_data
+            else:
+                transmit_data = {
+                    'packer': 'matrix',
+                    'data': self.data.tolist(),
+                    'algorithm': self.algorithm,
+                }
+                return transmit_data
         except Exception as e:
             print(f"Error preparing data: {e}")
             return None
