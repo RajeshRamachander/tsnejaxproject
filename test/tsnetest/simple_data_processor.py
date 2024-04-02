@@ -1,7 +1,6 @@
 from sklearn.datasets import load_digits
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from matplotlib import rcParams
 import ast
 import time
@@ -80,13 +79,14 @@ class SimpleDataProcessor:
 
     def output_data_processor_full(self, processed_result):
 
-        print("Processing data prepared with the full method.")
+
         
         if processed_result is None:
             print("No result to process.")
             return
         else:
-            print(f'Result: {processed_result}')
+            # print(f'Result: {processed_result}')
+            print("Processing result prepared with the full method.")
 
         if isinstance(processed_result, list):
             low_dim = np.array(processed_result)
@@ -110,13 +110,14 @@ class SimpleDataProcessor:
 
     def output_data_processor_matrix(self, processed_result):
     
-        print("Processing data prepared with the matrix method.")
+
         
         if processed_result is None:
             print("No result to process.")
             return
         else:
-            print(f'Result: {processed_result}')
+            # print(f'Result: {processed_result}')
+            print("Processing result prepared with the matrix method.")
 
     
         if isinstance(processed_result, list):
