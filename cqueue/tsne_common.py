@@ -264,6 +264,8 @@ def process_data_and_compute_matrix(data, is_ntk):
     if setup_device_for_jax():
         high_dimensional_data = put_data_on_gpu(data)
         print('Data is on GPU')
+    else:
+        print('Data is on CPU')
 
     print(f'NTK is: {is_ntk}')
 
