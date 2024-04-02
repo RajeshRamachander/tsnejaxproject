@@ -13,19 +13,23 @@ class SimpleDataProcessor:
         self.perplexity = perplexity
         self.num_iterations = num_iterations
         self.learning_rate = learning_rate
-        self.preparation_method = None 
+        self.preparation_method = None
+        self.data = None
+        self.classes = None
         try:
             digits, digit_class = load_digits(return_X_y=True)
             if self.size is None or self.size > digits.shape[0]:
                 # Use the full dataset if size is None or larger than the dataset
                 self.data = digits
                 self.classes = digit_class
+                self.size = digits.shape[0]
             else:
                 # Otherwise, randomly select a subset of the data
                 rand_idx = np.random.choice(np.arange(digits.shape[0]), size=self.size, replace=False)
                 self.data = digits[rand_idx, :]
                 self.classes = digit_class[rand_idx]
-            print(f"Data prepared with shape: {data.shape}")
+                self.size = digits.shape[0]
+            print(f"Data prepared with shape: {self.data.shape}")
         except Exception as e:
             print(f"Error preparing data: {e}")
 
@@ -141,8 +145,6 @@ class SimpleDataProcessor:
         plt.yticks(np.arange(matrix.shape[0]))  # Adjust as necessary
 
         plt.show()
-
-
 
 
     def wait_for_completion(self, task_id, server_communicator):
