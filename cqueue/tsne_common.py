@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from jax import random
 from ntk import compute_ntk_matrix
 
-Low_dimensional_chunking_limit_size = 2000
+Low_dimensional_chunking_limit_size = 200
 High_dimensional_chunking_limit_size = 200
 
 @jit

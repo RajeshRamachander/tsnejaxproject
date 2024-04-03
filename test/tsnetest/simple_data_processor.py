@@ -3,22 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import ast
-import time
 import pandas as pd
-from datetime import datetime
+from base_data_processor import BaseDataProcessor
 
-class SimpleDataProcessor:
-    def __init__(self, algorithm, preparation_method = None,
-                 size=None, perplexity=30, num_iterations=10000, learning_rate=100):
-        self.algorithm = algorithm
-        self.size = size
-        self.perplexity = perplexity
-        self.num_iterations = num_iterations
-        self.learning_rate = learning_rate
-        self.preparation_method = None
-        self.data = None
-        self.classes = None
-        self.filename_to_save_output = None
+class SimpleDataProcessor(BaseDataProcessor):
+
+    def load_data(self):
+
         try:
             digits, digit_class = load_digits(return_X_y=True)
             if self.size is None or self.size > digits.shape[0]:
@@ -35,16 +26,9 @@ class SimpleDataProcessor:
             print(f"Data prepared with shape: {self.data.shape}")
         except Exception as e:
             print(f"Error preparing data: {e}")
+            raise ValueError(f"load data failed")
 
-        if preparation_method is None or preparation_method =='full':
-            self.preparation_method = 'full'
-        elif preparation_method == 'matrix':
-            self.preparation_method = 'matrix'
-            self.filename_to_save_output = self.generate_file_name_with_timestamp()
-        else:
-            self.preparation_method = preparation_method
-            print(f"Unknown preparation method: {self.preparation_method}")
-            raise ValueError(f"Unknown preparation method: {self.preparation_method}")
+        return self.data, self.classes, self.size
 
 
     def prepare_data(self):
@@ -82,8 +66,6 @@ class SimpleDataProcessor:
 
 
     def output_data_processor_full(self, processed_result):
-
-
         
         if processed_result is None:
             print("No result to process.")
@@ -158,32 +140,4 @@ class SimpleDataProcessor:
 
         # save data to csv file
         pd.DataFrame(matrix).to_csv(self.filename_to_save_output, index=False)
-
-    def generate_file_name_with_timestamp(self):
-        timestamp = datetime.now()
-        return f'Load_digits_matrix_{self.size}_{timestamp.strftime("%Y%m%d-%H-%M-%S")}.csv'
-
-    def wait_for_completion(self, task_id, server_communicator):
-        """Polls the server for the status of the task until it is completed.
-
-        Args:
-            task_id (str): The ID of the task to check.
-            server_communicator (ServerCommunicator): The communicator object to interact with the server.
-
-        Returns:
-            The result of the task if successful, None otherwise.
-        """
-        while True:
-            status_data = server_communicator.check_task_status(task_id)
-            status = status_data['status']
-
-            if status == 'success':
-                print('Task completed successfully.')
-                return status_data['result']
-            elif status == 'processing':
-                print('Task is still processing. Waiting...')
-                time.sleep(1)  # Wait for a bit before checking again
-            else:
-                print(f'Error or unknown status received: {status}')
-                return None
 
