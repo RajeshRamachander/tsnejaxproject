@@ -6,6 +6,7 @@ from jax.numpy.linalg import svd
 import jax.numpy as jnp
 from jax import random
 from ntk import compute_ntk_matrix
+from jax.scipy.special import logsumexp
 
 Low_dimensional_chunking_limit_size = 200
 High_dimensional_chunking_limit_size = 200
@@ -32,11 +33,6 @@ def compute_pairwise_distances(chunk1, chunk2):
     sum_Y = jnp.sum(jnp.square(chunk2), axis=1)
     D = sum_X[:, None] + sum_Y[None, :] - 2 * jnp.dot(chunk1, chunk2.T)
     return D
-# def compute_pairwise_distances(dim_data):
-#     # Efficient broadcasting for pairwise squared Euclidean distances
-#     sum_X = jnp.sum(jnp.square(dim_data), axis=1)
-#     D = sum_X[:, None] - 2 * jnp.dot(dim_data, dim_data.T) + sum_X[None, :]
-#     return D
 
 @jit
 def get_eculidean_probability_at_ij(d, scale, i):
@@ -140,11 +136,9 @@ def compute_grad(R, Y_dists, Y):
 def compute_data_matrix(chunk1, chunk2, is_ntk):
     # def compute_data_matrix(high_dimensional_data, is_ntk):
     def true_fun(_):
-        # return compute_ntk_matrix(high_dimensional_data)
         return compute_ntk_matrix(chunk1, chunk2)
 
     def false_fun(_):
-        # return compute_pairwise_distances(high_dimensional_data)
         return compute_pairwise_distances(chunk1, chunk2)
 
     return jax.lax.cond(is_ntk,
@@ -244,19 +238,31 @@ def run_embedding_process(P, num_dimensions, max_iterations, learning_rate, rand
 
     return Y
 
-def apply_scaling(affinity_matrix, scaling_factor):
-    # Apply the scaling factor to the affinity matrix
-    return affinity_matrix * scaling_factor
 
-
-def calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, attempts=75, is_ntk=False):
+def calculate_scaled_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk=False):
     # Calculate the all symmetrical affinities
     affinity_matrix = all_sym_affinities(data_mat, perplexity, perp_tol, attempts, is_ntk)
 
-    # Apply the scaling factor
-    P = apply_scaling(affinity_matrix, scaling_factor)
+    return affinity_matrix
 
-    return P
+# Define a function to normalize the data using Min-Max scaling
+def min_max_scaling(data):
+    min_val = jnp.min(data, axis=0)
+    max_val = jnp.max(data, axis=0)
+    scaled_data = (data - min_val) / (max_val - min_val)
+    return scaled_data
+
+# Define a function to normalize the data using Z-score normalization
+def z_score_normalization(data):
+    mean = jnp.mean(data, axis=0)
+    std_dev = jnp.std(data, axis=0)
+    normalized_data = (data - mean) / std_dev
+    return normalized_data
+
+def normalization(image_data):
+    norm = jnp.linalg.norm(image_data)
+    normalized_data = image_data / norm
+    return normalized_data
 
 def process_data_and_compute_matrix(data, is_ntk):
 
@@ -267,19 +273,19 @@ def process_data_and_compute_matrix(data, is_ntk):
     else:
         print('Data is on CPU')
 
+
+
     print(f'NTK is: {is_ntk}')
 
     data = pca_jax(data) \
         if data.shape[1] > 30 else data
 
-    # # Compute the data matrix based on the processed high-dimensional data and is_ntk flag
-    # data_mat = compute_data_matrix(data, is_ntk)
-    #
-    # return data_mat
+    data = normalization(data)
+
     n = data.shape[0]
     distance_matrix = jnp.zeros((n, n))
     # Determine whether to use chunking based on data size
-    use_chunking = n > 200
+    use_chunking = n > High_dimensional_chunking_limit_size
     chunk_size = High_dimensional_chunking_limit_size if use_chunking else n  # If not using chunking, process all data at once
 
     # Chunking and computing distances
@@ -308,7 +314,7 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     data_mat = process_data_and_compute_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
-    P = calculate_scaled_affinities(data_mat, perplexity, perp_tol, scaling_factor, attempts = 75, is_ntk = is_ntk)
+    P = scaling_factor * calculate_scaled_affinities(data_mat, perplexity, perp_tol, attempts = 250, is_ntk = is_ntk)
 
     Y = run_embedding_process(P, num_dimensions, max_iterations, learning_rate, random_state)
 

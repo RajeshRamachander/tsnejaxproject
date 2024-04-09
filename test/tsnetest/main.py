@@ -4,15 +4,15 @@ from simple_data_processor import SimpleDataProcessor
 def main():
 
     algorithms = [
-                'ntk',
-                #   'jax_tsne',
-                #   'sklearn_tsne'
+                # 'ntk',
+                  'jax_tsne',
+                  # 'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
         print(f"Starting t-SNE with {algorithm} algorithm.")
         data_processor = SimpleDataProcessor(algorithm,
-                                             preparation_method='matrix',
+                                             preparation_method='full',
                                              filename_to_save_output = None,
                                              size = None,
                                              perplexity=30,     
