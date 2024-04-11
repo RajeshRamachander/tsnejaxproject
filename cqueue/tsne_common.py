@@ -41,8 +41,8 @@ def get_eculidean_probability_at_ij(d, scale, i):
     d_scaled -= jnp.max(d_scaled)
     exp_D = jnp.exp(d_scaled)
     exp_D = exp_D.at[i].set(0)
-    epsilon = 1e-8
-    return exp_D / (jnp.sum(exp_D)+epsilon)
+    epsilon = 1e-8  #to give numerical stability and avoid division by zero
+    return exp_D / (jnp.sum(exp_D) + epsilon)
 
 @jit
 def get_ntk_probability_at_ij(d, sigma, i):
@@ -97,9 +97,9 @@ def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
         d = data_mat[i, :]
 
         def cond_fun(val):
-            _, _, _, t, current_perp, _ = val
+            _, _, _, iterations, current_perp, _ = val
             # return jnp.logical_and(jnp.abs(current_perp - perp) > tol, attempts >= t).all()
-            return t <= max_attempts
+            return iterations <= max_attempts
 
         def body_fun(val):
             sigma_min, sigma_max, d, attempts_counter, p_ij, _ = val
@@ -108,18 +108,20 @@ def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
             p_ij = get_probability_at_ij(d, scale, i, is_ntk)
             current_perp = get_shannon_entropy(p_ij)
 
-            update_cond = current_perp < target_perp
+            sigma_update_cond = current_perp < target_perp
 
-            sigma_min = jax.lax.cond(update_cond, lambda : sigma_mid, lambda : sigma_min)
-            sigma_max = jax.lax.cond(update_cond, lambda : sigma_max, lambda : sigma_mid)
+            sigma_min = jax.lax.cond(sigma_update_cond, lambda : sigma_mid, lambda : sigma_min)
+            sigma_max = jax.lax.cond(sigma_update_cond, lambda : sigma_max, lambda : sigma_mid)
 
-            perp_cond = jnp.abs(current_perp - target_perp) > tol
+            perp_cond_reached = jnp.abs(current_perp - target_perp) < tol
 
-            t = jax.lax.cond(perp_cond, lambda: attempts_counter + 1, lambda: max_attempts )
+            attempts_counter = jax.lax.cond(perp_cond_reached, lambda: max_attempts, lambda: attempts_counter + 1  )
 
-            return sigma_min, sigma_max, d, t, p_ij, current_perp
+            return sigma_min, sigma_max, d, attempts_counter, p_ij, current_perp
 
-        sigma_min, sigma_max, d, t, p_ij, current_perp = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), n_samples ))
+        sigma_min, sigma_max, d, t, p_ij, current_perp = jax.lax.while_loop(cond_fun,
+                                                                            body_fun,
+                                                                            (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), n_samples ))
         # Update P correctly using the result from while_loop
         hcb.call(perp_value, current_perp)
         hcb.call(perp_attempts,t)
