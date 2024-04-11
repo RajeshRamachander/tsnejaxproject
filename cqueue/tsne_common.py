@@ -97,8 +97,7 @@ def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
         d = data_mat[i, :]
 
         def cond_fun(val):
-            _, _, _, iterations, current_perp, _ = val
-            # return jnp.logical_and(jnp.abs(current_perp - perp) > tol, attempts >= t).all()
+            _, _, _, iterations, _, _ = val
             return iterations <= max_attempts
 
         def body_fun(val):
@@ -121,11 +120,10 @@ def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
 
         sigma_min, sigma_max, d, t, p_ij, current_perp = jax.lax.while_loop(cond_fun,
                                                                             body_fun,
-                                                                            (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), n_samples ))
+                                                                            (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), 1e4 ))
+        # hcb.call(perp_value, current_perp)
+        # hcb.call(perp_attempts,t)
         # Update P correctly using the result from while_loop
-        hcb.call(perp_value, current_perp)
-        hcb.call(perp_attempts,t)
-
         P = P.at[i, :].set(p_ij)
         return P
 
