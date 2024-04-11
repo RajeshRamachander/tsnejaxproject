@@ -6,7 +6,8 @@ from jax.numpy.linalg import svd
 import jax.numpy as jnp
 from jax import random
 from ntk import compute_ntk_matrix
-from jax.scipy.special import logsumexp
+from jax.experimental import host_callback as hcb
+
 
 Low_dimensional_chunking_limit_size = 200
 High_dimensional_chunking_limit_size = 200
@@ -74,45 +75,62 @@ def print_attempts(value):
   """Prints the value on the host machine."""
   print(f"attempts done: {value}")
 
-@jit
-def all_sym_affinities(data_mat, perp, tol,attempts=250,  is_ntk=True):
 
+def perp_value(value):
+  print(f"perp_value: {value}")
+
+def perp_attempts(value):
+  print(f"attempts: {value}")
+
+@jit
+def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
+                                sigma_low = 0.0, sigma_high = 1e4,
+                                max_attempts=250, is_ntk=True):
     n_samples = data_mat.shape[0]
 
     # Correctly initialize P outside the loop
     P = jnp.zeros(data_mat.shape)
 
     def body_fun(i, P):
-        sigma_max = 1e4
-        sigma_min = 0.0
+        sigma_max = sigma_high
+        sigma_min = sigma_low
         d = data_mat[i, :]
 
         def cond_fun(val):
-            sigma_min, sigma_max, _, attempts_counter = val
-            # host_callback.call(print_attempts, attempts_counter)
-            return (jnp.abs(sigma_max - sigma_min) > tol) & (attempts_counter < attempts)
+            _, _, _, t, current_perp, _ = val
+            # return jnp.logical_and(jnp.abs(current_perp - perp) > tol, attempts >= t).all()
+            return t <= max_attempts
 
         def body_fun(val):
-            sigma_min, sigma_max, p_ij, attempts_counter = val
+            sigma_min, sigma_max, d, attempts_counter, p_ij, _ = val
             sigma_mid = (sigma_min + sigma_max) / 2
             scale = 2 * sigma_mid ** 2
             p_ij = get_probability_at_ij(d, scale, i, is_ntk)
             current_perp = get_shannon_entropy(p_ij)
 
-            update_cond = current_perp < perp
-            sigma_min = jax.lax.cond(update_cond, lambda: sigma_mid, lambda: sigma_min)
-            sigma_max = jax.lax.cond(update_cond, lambda: sigma_max, lambda: sigma_mid)
-            return sigma_min, sigma_max, p_ij, attempts_counter + 1
+            update_cond = current_perp < target_perp
 
-        _, _, p_ij, attempts_counter = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, jnp.zeros_like(d), 0))
-        # host_callback.call(print_attempts, attempts_counter)
+            sigma_min = jax.lax.cond(update_cond, lambda : sigma_mid, lambda : sigma_min)
+            sigma_max = jax.lax.cond(update_cond, lambda : sigma_max, lambda : sigma_mid)
+
+            perp_cond = jnp.abs(current_perp - target_perp) > tol
+
+            t = jax.lax.cond(perp_cond, lambda: attempts_counter + 1, lambda: max_attempts )
+
+            return sigma_min, sigma_max, d, t, p_ij, current_perp
+
+        sigma_min, sigma_max, d, t, p_ij, current_perp = jax.lax.while_loop(cond_fun, body_fun, (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), n_samples ))
         # Update P correctly using the result from while_loop
+        hcb.call(perp_value, current_perp)
+        hcb.call(perp_attempts,t)
+
         P = P.at[i, :].set(p_ij)
         return P
 
     # Use lax.fori_loop to iterate over samples and update P
     P = jax.lax.fori_loop(0, n_samples, body_fun, P)
     return (P + P.T) / (2 * n_samples)
+
 
 @jit
 def compute_grad(R, Y_dists, Y):
@@ -238,13 +256,6 @@ def run_embedding_process(P, num_dimensions, max_iterations, learning_rate, rand
 
     return Y
 
-
-def calculate_scaled_affinities(data_mat, perplexity, perp_tol, attempts=75, is_ntk=False):
-    # Calculate the all symmetrical affinities
-    affinity_matrix = all_sym_affinities(data_mat, perplexity, perp_tol, attempts, is_ntk)
-
-    return affinity_matrix
-
 # Define a function to normalize the data using Min-Max scaling
 def min_max_scaling(data):
     min_val = jnp.min(data, axis=0)
@@ -306,7 +317,7 @@ def process_data_and_compute_matrix(data, is_ntk):
 
 def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
                                       perplexity, max_iterations=100,
-                                      learning_rate=10, scaling_factor=1.,
+                                      learning_rate=10, scaling_factor=2.,
                                       random_state=42,
                                       perp_tol=1e-6,
                                        is_ntk = False):
@@ -314,7 +325,9 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     data_mat = process_data_and_compute_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
-    P = scaling_factor * calculate_scaled_affinities(data_mat, perplexity, perp_tol, attempts = 250, is_ntk = is_ntk)
+    P = scaling_factor * calculate_scaled_affinities(data_mat, target_perp = perplexity,
+                                                     tol = perp_tol, sigma_low=0.0, sigma_high=1e4,
+                                                     max_attempts= 250, is_ntk = is_ntk)
 
     Y = run_embedding_process(P, num_dimensions, max_iterations, learning_rate, random_state)
 

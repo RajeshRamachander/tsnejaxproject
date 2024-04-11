@@ -14,7 +14,7 @@ def main():
         data_processor = SimpleDataProcessor(algorithm,
                                              preparation_method='full',
                                              filename_to_save_output = None,
-                                             size = None,
+                                             size = 500,
                                              perplexity=30,     
                                              num_iterations=1000, 
                                              learning_rate=100,
