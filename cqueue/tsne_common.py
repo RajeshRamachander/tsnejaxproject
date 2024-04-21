@@ -47,7 +47,7 @@ def get_eculidean_probability_at_ij(d, scale, i):
 @jit
 def get_ntk_probability_at_ij(d, sigma, i):
     # No negation for NTK values, as larger values indicate stronger influence.
-    d_scaled = d / (sigma**2)
+    d_scaled = d / (sigma)
     d_scaled -= d_scaled.min()  # Min normalization
     d_scaled = d_scaled.at[i].set(-jnp.inf)
     probabilties = softmax(d_scaled/.5)
@@ -76,62 +76,104 @@ def print_attempts(value):
   print(f"attempts done: {value}")
 
 
-def perp_value(value):
-  print(f"perp_value: {value}")
+def perp_current_value(value):
+  print(f"current_perp: {value}")
+
+def perp_target_value(value):
+  print(f"target_perp: {value}")
+
 
 def perp_attempts(value):
   print(f"attempts: {value}")
 
+def perp_condition(value):
+  print(f"condition: {value}")
+
+def perp_tol(value):
+    print(f"tol: {value}")
+
 @jit
-def calculate_scaled_affinities(data_mat, target_perp=30, tol = 1e-6,
+def calculate_scaled_affinities_jit(data_mat, target_perp=30, tol = 1e-6,
                                 sigma_low = 0.0, sigma_high = 1e4,
                                 max_attempts=250, is_ntk=True):
-    n_samples = data_mat.shape[0]
-
-    # Correctly initialize P outside the loop
+    n = data_mat.shape[0]
     P = jnp.zeros(data_mat.shape)
 
-    def body_fun(i, P):
-        sigma_max = sigma_high
-        sigma_min = sigma_low
+    def body_fun_outer(i, P):
+        LB_i = sigma_low
+        UB_i = sigma_high
         d = data_mat[i, :]
 
-        def cond_fun(val):
-            _, _, _, iterations, _, _ = val
-            return iterations <= max_attempts
+        def cond_fun_inner(val):
+            _, _, t, _ = val
+            # hcb.call(perp_attempts, iterations)
+            return t <= max_attempts
 
-        def body_fun(val):
-            sigma_min, sigma_max, d, attempts_counter, p_ij, _ = val
-            sigma_mid = (sigma_min + sigma_max) / 2
-            scale = 2 * sigma_mid ** 2
+        def body_fun_inner(val):
+            LB_i, UB_i, t, _ = val
+            midpoint = (LB_i + UB_i) / 2
+            scale = 2 * midpoint ** 2
             p_ij = get_probability_at_ij(d, scale, i, is_ntk)
             current_perp = get_shannon_entropy(p_ij)
 
             sigma_update_cond = current_perp < target_perp
 
-            sigma_min = jax.lax.cond(sigma_update_cond, lambda : sigma_mid, lambda : sigma_min)
-            sigma_max = jax.lax.cond(sigma_update_cond, lambda : sigma_max, lambda : sigma_mid)
+            LB_i = jax.lax.cond(sigma_update_cond, lambda : midpoint, lambda : LB_i)
+            UB_i = jax.lax.cond(sigma_update_cond, lambda : UB_i, lambda : midpoint)
 
-            perp_cond_reached = jnp.abs(current_perp - target_perp) < tol
+            perp_cond_reached = jnp.isclose(current_perp, target_perp, atol=tol)
 
-            attempts_counter = jax.lax.cond(perp_cond_reached, lambda: max_attempts, lambda: attempts_counter + 1  )
+            hcb.call(perp_current_value, current_perp)
+            hcb.call(perp_condition, perp_cond_reached)
+            hcb.call(perp_attempts, t)
+            t = jax.lax.cond(perp_cond_reached, lambda: max_attempts, lambda: t + 1  )
 
-            return sigma_min, sigma_max, d, attempts_counter, p_ij, current_perp
+            return LB_i, UB_i, t, p_ij
 
-        sigma_min, sigma_max, d, t, p_ij, current_perp = jax.lax.while_loop(cond_fun,
-                                                                            body_fun,
-                                                                            (sigma_min, sigma_max, d, 0, jnp.zeros_like(d), 1e4 ))
-        # hcb.call(perp_value, current_perp)
-        # hcb.call(perp_attempts,t)
-        # Update P correctly using the result from while_loop
+        _, _, t, p_ij = jax.lax.while_loop(cond_fun_inner,body_fun_inner,(LB_i, UB_i, 0, P[i,:]))
+
         P = P.at[i, :].set(p_ij)
         return P
 
-    # Use lax.fori_loop to iterate over samples and update P
-    P = jax.lax.fori_loop(0, n_samples, body_fun, P)
-    return (P + P.T) / (2 * n_samples)
+    P = jax.lax.fori_loop(0, n, body_fun_outer, P)
+    return (P + P.T) / (2 * n)
+
+def calculate_scaled_affinities_py(data_mat, target_perp=30, tol = 1e-6,
+                                sigma_low = 0.0, sigma_high = 1e4,
+                                max_attempts=250, is_ntk=True):
+    n = data_mat.shape[0]
+    P = jnp.zeros(data_mat.shape)
+
+    for i in range(n):
+        LB_i = sigma_low
+        UB_i = sigma_high
+        d = data_mat[i, :]
+
+        for t in range(max_attempts):
+            # Find the perplexity using sigma = midpoint.
+            midpoint = (LB_i + UB_i) / 2
+            scale = 2 * midpoint ** 2
+            p_ij = get_probability_at_ij(d, scale, i, is_ntk)
+            current_perp = get_shannon_entropy(p_ij)
+
+            if current_perp < target_perp:
+                LB_i = midpoint
+            else:
+                UB_i = midpoint
 
 
+            perp_cond_reached = jnp.isclose(current_perp, target_perp, atol=tol)
+
+            # hcb.call(perp_current_value,current_perp)
+            # hcb.call(perp_condition, perp_cond_reached)
+            # hcb.call(perp_attempts, t)
+
+            if perp_cond_reached:
+                break
+
+        P = P.at[i, :].set(p_ij)
+
+    return (P + P.T) / (2 * n)
 @jit
 def compute_grad(R, Y_dists, Y):
 
@@ -284,7 +326,8 @@ def process_data_and_compute_matrix(data, is_ntk):
     else:
         print('Data is on CPU')
 
-
+    # Update the global configuration to use float64 precision
+    jax.config.update("jax_enable_x64",True)
 
     print(f'NTK is: {is_ntk}')
 
@@ -325,12 +368,19 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
     data_mat = process_data_and_compute_matrix(high_dimensional_data, is_ntk)
 
     # Compute pairwise affinities in high-dimensional space, scaled by a factor
-    P = scaling_factor * calculate_scaled_affinities(data_mat, target_perp = perplexity,
+    P = scaling_factor * calculate_scaled_affinities_py(data_mat, target_perp = perplexity,
                                                      tol = perp_tol, sigma_low=0.0, sigma_high=1e4,
                                                      max_attempts= 250, is_ntk = is_ntk)
 
     Y = run_embedding_process(P, num_dimensions, max_iterations, learning_rate, random_state)
 
     print(Y.shape)
+
+    # Check the current floating-point precision setting
+    if jax.config.jax_enable_x64:
+        print("JAX is using 64-bit floating-point precision (float64).")
+    else:
+        print("JAX is using 32-bit floating-point precision (float32).")
+
 
     return Y[-1]

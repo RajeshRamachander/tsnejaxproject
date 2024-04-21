@@ -3,6 +3,7 @@
 # Define a function to check if Celery is running
 is_celery_running() {
   ps aux | grep "celery -A tasks worker" | grep -v grep > /dev/null 2>&1
+  #ps aux | grep "celery -A tasks worker" | grep -v grep | awk '{print $2}' | xargs kill -9
   return $?
 }
 
