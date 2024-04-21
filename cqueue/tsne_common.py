@@ -192,6 +192,17 @@ def compute_grad(R, Y_dists, Y):
 
     return dY
 
+def compute_grad_py(R, Y_dists, Y):
+
+    dY = jnp.zeros_like(Y)
+
+    for i in range(Y.shape[0]):
+        grad_contribution = 4*jnp.dot(R[i,:]*Y_dists[i,:], Y[i,:] - Y)
+        dY = dY.at[i,:].set(grad_contribution)
+
+    return dY
+
+
 @jit
 def compute_data_matrix(chunk1, chunk2, is_ntk):
     # def compute_data_matrix(high_dimensional_data, is_ntk):
@@ -216,16 +227,19 @@ def chunk_compute_assemble_distances(Y, chunk_size=Low_dimensional_chunking_limi
         # Compute pairwise distances in chunks
         for i in range(0, n, int(chunk_size)):
             for j in range(0, n, int(chunk_size)):
+                # Determine the end indices for the chunk
+                end_i = min(i + chunk_size, n)
+                end_j = min(j + chunk_size, n)
                 # Extract chunks
-                chunk1 = Y[i:i + chunk_size]
-                chunk2 = Y[j:j + chunk_size]
+                chunk1 = Y[i:end_i]
+                chunk2 = Y[j:end_j]
 
                 # Compute distances for the current chunks
                 distances_chunk = compute_pairwise_distances(chunk1, chunk2)
 
                 # Update the corresponding part of the full distance matrix
                 # Note: JAX arrays are immutable, so we need to use the .at[].set method for updates
-                full_distance_matrix = full_distance_matrix.at[i:i + chunk_size, j:j + chunk_size].set(distances_chunk)
+                full_distance_matrix = full_distance_matrix.at[i:end_i, j:end_j].set(distances_chunk)
 
         return full_distance_matrix
     else:
@@ -233,14 +247,14 @@ def chunk_compute_assemble_distances(Y, chunk_size=Low_dimensional_chunking_limi
 
 
 def low_dim_affinities(Y):
-    # D = compute_pairwise_distances(Y)
     D = chunk_compute_assemble_distances(Y)
     Y_dists = jnp.power(1 + D , -1)
+    # overall, Y_dists_no_diag will be the matrix Y_dists with all its diagonal elements set to zero.
     n = Y_dists.shape[0]
     Y_dists_no_diag = Y_dists.at[jnp.diag_indices(n)].set(0)
     # Ensure denominator is not too close to zero by adding a small constant epsilon
-    epsilon = 1e-8
-    normalized_Y_dists_no_diag = Y_dists_no_diag / (jnp.sum(Y_dists_no_diag) + epsilon)
+    # epsilon = 1e-8
+    normalized_Y_dists_no_diag = Y_dists_no_diag / (jnp.sum(Y_dists_no_diag)) # + epsilon)
 
     return normalized_Y_dists_no_diag, Y_dists
 
@@ -274,12 +288,12 @@ def initialize_embedding(P, num_dimensions, max_iterations, random_state):
 
 
 def update_step(i, state):
-    Y_m1, Y_m2, embedding_matrix_container, learning_rate, P = state
-    Q, Y_dists = low_dim_affinities(Y_m1)  # Assuming these can be JIT compiled or are already JAX ops
-    grad = compute_grad(P - Q, Y_dists, Y_m1)  # Ditto
+    Y_m2, Y_m1, embedding_matrix_container, learning_rate, P = state
+    Q, Y_dists = low_dim_affinities(Y_m1)
+    grad = compute_grad_py(P - Q, Y_dists, Y_m1)
     Y_new = Y_m1 - learning_rate * grad + momentum_func(i) * (Y_m1 - Y_m2)
     embedding_matrix_container = embedding_matrix_container.at[i, :, :].set(Y_new)
-    return (Y_new, Y_m1, embedding_matrix_container, learning_rate, P)
+    return (Y_m1, Y_new, embedding_matrix_container, learning_rate, P)
 
 
 def optimize_embeddings(max_iterations, initial_vals, learning_rate, P,
