@@ -5,6 +5,7 @@ from matplotlib import rcParams
 import ast
 import pandas as pd
 from base_data_processor import BaseDataProcessor
+from matplotlib import animation
 
 class SimpleDataProcessor(BaseDataProcessor):
 
@@ -75,15 +76,24 @@ class SimpleDataProcessor(BaseDataProcessor):
             print("Processing result prepared with the full method.")
 
         if isinstance(processed_result, list):
-            low_dim = np.array(processed_result)
+            low_dims_frames = np.array(processed_result)
+            print(f'low dimensions: {low_dims_frames}')
+            # self.plot_tsne_results_animation(low_dims_frames)
         else:
             # If it's a string, perform the original processing
             result_received = processed_result.replace("Result received: ", "")
-            low_dim = ast.literal_eval(result_received)
-            low_dim = np.array(low_dim)
+            low_dims_frames = ast.literal_eval(result_received)
+            low_dims_frames = np.array(low_dims_frames)
+            print(f'frames: {low_dims_frames}')
+            # self.plot_tsne_results_animation(low_dims_frames)
 
         rcParams["font.size"] = 18
         rcParams["figure.figsize"] = (12, 8)
+
+        if self.algorithm != 'sklearn_tsne':
+            low_dim = low_dims_frames[-1]
+        else:
+            low_dim = low_dims_frames
 
         print(f"Using {self.algorithm} for t-SNE.")
         scatter = plt.scatter(low_dim[:, 0], low_dim[:, 1], cmap="tab10", c=self.classes)
@@ -94,6 +104,31 @@ class SimpleDataProcessor(BaseDataProcessor):
 
         plt.show()
 
+    #     self.plot_tsne_results_animation(low_dims_frames,classes=self.classes)
+    #
+    # def plot_tsne_results_animation(self, low_dims_frames, classes):
+    #     rcParams["font.size"] = 18
+    #     rcParams["figure.figsize"] = (12, 8)
+    #
+    #     fig, ax = plt.subplots()
+    #
+    #     if classes is not None and len(set(classes)) == 1:  # Check if single class
+    #         class_label = classes[0]  # Extract the class value
+    #         color_array = class_label * np.ones(len(low_dims_frames[0]))  # Create color array with repeated class value
+    #
+    #         scatter = ax.scatter(low_dims_frames[0][:, 0], low_dims_frames[0][:, 1],
+    #                              cmap="tab10", c=color_array)
+    #     else:
+    #         scatter = ax.scatter([], [], cmap="tab10")  # Initialize without colors
+    #
+    #     def update(frame):
+    #         scatter.set_offsets(low_dims_frames[frame])
+    #         return scatter,
+    #
+    #     ani = animation.FuncAnimation(fig, update, frames=len(low_dims_frames), interval=100, blit=True)
+    #
+    #     plt.legend(*scatter.legend_elements(), fancybox=True, bbox_to_anchor=(1.05, 1))
+    #     plt.show()
 
     def output_data_processor_matrix(self, processed_result):
     

@@ -397,4 +397,4 @@ def compute_low_dimensional_embedding(high_dimensional_data, num_dimensions,
         print("JAX is using 32-bit floating-point precision (float32).")
 
 
-    return Y[-1]
+    return Y

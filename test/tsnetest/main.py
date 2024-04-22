@@ -4,9 +4,9 @@ from simple_data_processor import SimpleDataProcessor
 def main():
 
     algorithms = [
-                # 'ntk',
+                'ntk',
                   'jax_tsne',
-                  # 'sklearn_tsne'
+                  'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:
