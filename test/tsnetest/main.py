@@ -5,8 +5,8 @@ def main():
 
     algorithms = [
                 'ntk',
-                  'jax_tsne',
-                  'sklearn_tsne'
+                  # 'jax_tsne',
+                  # 'sklearn_tsne'
                   ]
    
     for algorithm in algorithms[::-1]:

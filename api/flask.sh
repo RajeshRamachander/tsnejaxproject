@@ -5,7 +5,7 @@ PORT=7020
 
 # Function to start the Flask app
 start_app() {
-    echo "Starting Flask app...$PORT"
+    echo "Starting Flask app on port $PORT..."
     FLASK_APP=./api/server.py FLASK_ENV=development FLASK_DEBUG=0 python -m flask run --host=0.0.0.0 --port=$PORT
     echo "Flask app started on port $PORT."
 }
@@ -23,13 +23,10 @@ stop_app() {
     fi
 }
 
-
-
-
 # Check the command-line argument
-if [ "$1" == "start" ]; then
+if [ "$1" = "start" ]; then
     start_app
-elif [ "$1" == "stop" ]; then
+elif [ "$1" = "stop" ]; then
     stop_app
 else
     echo "Usage: $0 [start|stop]"
