@@ -55,3 +55,13 @@ if __name__ == "__main__":
     print("JAX is running on:", device_type)
 
 
+import jax
+import jax.numpy as jnp
+from jax.lib import xla_bridge
+
+print("JAX is using platform:", xla_bridge.get_backend().platform)
+
+key = jax.random.PRNGKey(0)
+x = jax.random.normal(key, (1000, 1000))
+y = jnp.dot(x, x.T)
+print(y)
