@@ -17,7 +17,7 @@ def main():
         data_processor = Processor(algorithm,
                                              preparation_method='full',
                                              filename_to_save_output = None,
-                                             size = 1000,
+                                             size =20000,
                                              perplexity=30,     
                                              num_iterations=1000, 
                                              learning_rate=100,

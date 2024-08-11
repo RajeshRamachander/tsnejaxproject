@@ -10,8 +10,7 @@ from jax.experimental import host_callback as hcb
 
 
 Low_dimensional_chunking_limit_size = 200
-High_dimensional_chunking_limit_size = 200
-
+High_dimensional_chunking_limit_size = 1000
 @jit
 def pca_jax(X, k=30):
     # Center and scale the data

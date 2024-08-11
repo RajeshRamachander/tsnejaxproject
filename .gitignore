@@ -26,3 +26,6 @@ transport:
 /test/tsnetest/Load_digits_matrix_1797_20240402-22-33-45.csv
 /test/tsnetest/Load_digits_matrix_None_20240403-23-56-15.csv
 /test/tsnetest/Load_digits_matrix_None_20240404-00-24-34.csv
+/cuda_11.5.0_495.29.05_linux.run
+/test/tsnetest/test_plot.png
+/wget-log
